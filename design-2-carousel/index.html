@@ -739,47 +739,57 @@ function renderTile(){
 }
 
 // ============================================
-// ORBITAL 3D TRANSITION — tasteskill.dev reference
-// Tile arcs UP, OVER, and BEHIND the viewer.
-// Two-phase exit: lift toward viewer → rotate over head behind.
-// Full departure before any arrival. No overlap.
+// BOOM ARM ORBITAL TRANSITION
+// The tile is on the end of a fixed-radius boom arm.
+// It arcs upward along a circular path while always
+// facing the viewer (like holding a card overhead).
+// At 0° = face-on. At 90° = directly above, face down.
+// Y and Z follow the circular path; rotateX = angle.
 // ============================================
 const ORBIT = {
   exitDur: 0.55,
   enterDur: 0.6,
+  radius: 420,       // boom arm length in px
+  exitAngle: 130,    // degrees — well past overhead (90°)
+  enterAngle: 120,   // degrees — where new tile starts from
 };
+
+// Compute boom arm position from angle (degrees)
+function boomPos(angleDeg, R, sign) {
+  const rad = angleDeg * Math.PI / 180;
+  return {
+    y: -sign * R * Math.sin(rad),
+    z: -R * (1 - Math.cos(rad)),
+    rotX: sign * angleDeg,
+  };
+}
 
 function exitTile(dir, onDone) {
   const tile = document.querySelector('.tile');
   if (!tile) { onDone(); return; }
   gsap.killTweensOf(tile);
 
-  // dir > 0 = next (swipe up): tile goes UP, OVER head, BEHIND
-  // dir < 0 = prev (swipe down): tile goes DOWN, UNDER feet, BEHIND
-  const sign = dir > 0 ? 1 : -1;
+  const sign = dir > 0 ? 1 : -1; // 1=up/over, -1=down/under
+  const R = ORBIT.radius;
+  const state = { angle: 0 };
 
-  const tl = gsap.timeline({
-    onComplete: () => { tile.remove(); onDone(); }
-  });
-
-  // Phase 1 (40%): Lift up toward viewer — tile rises and comes closer
-  tl.to(tile, {
-    y: sign * -100,
-    z: 80,               // closer to viewer (looming)
-    rotateX: sign * 35,  // start tilting over
-    scale: 1.04,
-    duration: ORBIT.exitDur * 0.4,
+  gsap.to(state, {
+    angle: ORBIT.exitAngle,
+    duration: ORBIT.exitDur,
     ease: 'power2.in',
-  });
-  // Phase 2 (60%): Rotate over head and plunge behind
-  tl.to(tile, {
-    y: sign * -200,
-    z: -700,               // deep behind viewer
-    rotateX: sign * 140,   // well past 90° = behind camera plane
-    scale: 0.5,
-    opacity: 0,
-    duration: ORBIT.exitDur * 0.6,
-    ease: 'power3.in',
+    onUpdate: () => {
+      const p = boomPos(state.angle, R, sign);
+      const progress = state.angle / ORBIT.exitAngle;
+      // Fade out in the last 40% of the arc
+      const opacity = progress < 0.6 ? 1 : 1 - (progress - 0.6) / 0.4;
+      gsap.set(tile, {
+        y: p.y,
+        z: p.z,
+        rotateX: p.rotX,
+        opacity: opacity,
+      });
+    },
+    onComplete: () => { tile.remove(); onDone(); }
   });
 }
 
@@ -787,28 +797,33 @@ function enterTile(fromDir) {
   const tile = document.querySelector('.tile');
   if (!tile) return;
 
-  // Enter from behind on the OPPOSITE side
+  // Enter from the opposite side of the arc
   const sign = fromDir > 0 ? -1 : 1;
+  const R = ORBIT.radius;
+  const state = { angle: ORBIT.enterAngle };
 
-  gsap.fromTo(tile,
-    {
-      rotateX: sign * 120,  // starting behind (past 90°)
-      z: -600,
-      y: sign * 150,
-      scale: 0.5,
-      opacity: 0
+  gsap.set(tile, { opacity: 0 });
+
+  gsap.to(state, {
+    angle: 0,
+    duration: ORBIT.enterDur,
+    ease: 'power2.out',
+    onUpdate: () => {
+      const p = boomPos(state.angle, R, sign);
+      const progress = state.angle / ORBIT.enterAngle;
+      // Fade in during the first 40% of the arc (when far away)
+      const opacity = progress > 0.6 ? 1 - (progress - 0.6) / 0.4 : 1;
+      gsap.set(tile, {
+        y: p.y,
+        z: p.z,
+        rotateX: p.rotX,
+        opacity: opacity,
+      });
     },
-    {
-      rotateX: 3,
-      z: 0,
-      y: 0,
-      scale: 1,
-      opacity: 1,
-      duration: ORBIT.enterDur,
-      ease: 'power2.out',
-      clearProps: 'filter'
+    onComplete: () => {
+      gsap.set(tile, { y: 0, z: 0, rotateX: 3, opacity: 1, clearProps: 'filter' });
     }
-  );
+  });
 }
 
 // ============================================
@@ -905,12 +920,13 @@ function nav(dir) {
   });
 }
 
-// Spin through multiple: rapid orbital cycles — fast and punchy
+// Spin through multiple: rapid boom-arm arcs — fast and punchy
 function spinNav(dir, count) {
   if (anim || !filtered.length) return;
   anim = true;
   let i = 0;
   const sign = dir > 0 ? 1 : -1;
+  const R = ORBIT.radius * 0.7; // tighter radius for spin
 
   function step() {
     if (i >= count) {
@@ -920,31 +936,44 @@ function spinNav(dir, count) {
     if (!tile) { anim = false; gestLock = false; return; }
 
     const progress = i / count;
-    const exitDur = 0.08 + progress * 0.1;   // 80ms → 180ms (fast!)
-    const enterDur = 0.08 + progress * 0.12;  // 80ms → 200ms
+    const exitDur = 0.08 + progress * 0.1;
+    const enterDur = 0.08 + progress * 0.12;
+    const exitAngle = 100 + progress * 20;
+    const state = { angle: 0 };
 
     gsap.killTweensOf(tile);
-    gsap.to(tile, {
-      rotateX: sign * (90 + progress * 30),
-      z: -400,
-      y: sign * -80,
-      scale: 0.65,
-      opacity: 0,
+    gsap.to(state, {
+      angle: exitAngle,
       duration: exitDur,
       ease: 'power2.in',
+      onUpdate: () => {
+        const p = boomPos(state.angle, R, sign);
+        const prog = state.angle / exitAngle;
+        gsap.set(tile, { y: p.y, z: p.z, rotateX: p.rotX, opacity: prog < 0.5 ? 1 : 1 - (prog - 0.5) * 2 });
+      },
       onComplete: () => {
         tile.remove();
         idx = (idx + dir + filtered.length) % filtered.length;
         renderTile();
         const newTile = document.querySelector('.tile');
         if (newTile && i < count - 1) {
-          gsap.fromTo(newTile,
-            { rotateX: sign * -50, z: -250, y: sign * 50, scale: 0.85, opacity: 0 },
-            { rotateX: 3, z: 0, y: 0, scale: 1, opacity: 1,
-              duration: enterDur, ease: 'power2.out',
-              onComplete: () => { i++; step(); }
+          const enterState = { angle: 80 };
+          const enterSign = -sign;
+          gsap.set(newTile, { opacity: 0 });
+          gsap.to(enterState, {
+            angle: 0,
+            duration: enterDur,
+            ease: 'power2.out',
+            onUpdate: () => {
+              const p = boomPos(enterState.angle, R, enterSign);
+              const prog = enterState.angle / 80;
+              gsap.set(newTile, { y: p.y, z: p.z, rotateX: p.rotX, opacity: prog > 0.5 ? 1 - (prog - 0.5) * 2 : 1 });
+            },
+            onComplete: () => {
+              gsap.set(newTile, { y: 0, z: 0, rotateX: 3, opacity: 1 });
+              i++; step();
             }
-          );
+          });
         } else {
           enterTile(dir);
           setTimeout(() => { i++; step(); }, ORBIT.enterDur * 1000);
