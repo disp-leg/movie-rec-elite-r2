@@ -271,23 +271,25 @@ body {
     0 28px 56px rgba(0,0,0,0.08),
     0 56px 80px rgba(0,0,0,0.05);
   overflow: hidden;
-  padding: 14px 16px;
+  padding: 18px 18px;
   -webkit-overflow-scrolling: touch;
   background-image: linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%);
+  display: flex;
+  flex-direction: column;
 }
 
 .back-title {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.3px;
   color: var(--text);
   line-height: 1.2;
-  margin-bottom: 2px;
+  margin-bottom: 3px;
 }
 .back-meta {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-dim);
-  margin-bottom: 8px;
+  margin-bottom: 12px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -304,21 +306,21 @@ body {
   font-weight: 600;
 }
 .back-synopsis {
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.6;
   color: var(--text-dim);
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 
 /* Quotes */
-.quote-block { margin-bottom: 8px; }
+.quote-block { margin-bottom: 12px; flex-shrink: 0; }
 .quote {
-  padding: 6px 10px;
+  padding: 8px 11px;
   border-radius: 8px;
-  font-size: 10px;
-  line-height: 1.45;
+  font-size: 11px;
+  line-height: 1.5;
   font-style: italic;
-  margin-bottom: 4px;
+  margin-bottom: 5px;
   color: var(--text-dim);
 }
 .q1 { background: var(--danger-soft); border-left: 2px solid var(--danger-border); }
@@ -326,12 +328,13 @@ body {
 
 /* Section labels */
 .section-lbl {
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1.2px;
   color: var(--text-muted);
-  margin-bottom: 5px;
+  margin-bottom: 6px;
+  flex-shrink: 0;
 }
 
 /* Stream links */
@@ -339,7 +342,8 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
 }
 .stream-link {
   display: inline-flex;
@@ -368,12 +372,13 @@ body {
 .actions-row {
   display: flex;
   justify-content: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-shrink: 0;
 }
 .act-btn {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   border: 1px solid rgba(0,0,0,0.06);
   background: var(--surface-2);
@@ -392,17 +397,19 @@ body {
   border-color: rgba(139,105,20,0.15);
   transform: scale(1.06);
 }
-.act-btn svg { width: 14px; height: 14px; }
+.act-btn svg { width: 15px; height: 15px; }
 
 /* Stars */
 .star-row {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   justify-content: center;
+  flex-shrink: 0;
+  margin-top: auto;
 }
 .star-btn {
-  width: 28px;
-  height: 34px;
+  width: 32px;
+  height: 38px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -412,7 +419,7 @@ body {
   padding: 0;
   font-family: inherit;
 }
-.star-btn svg { width: 16px; height: 16px; color: var(--surface-3); transition: color 150ms ease; }
+.star-btn svg { width: 18px; height: 18px; color: var(--surface-3); transition: color 150ms ease; }
 .star-btn.on svg { color: var(--accent); }
 
 /* Bottom bar */
@@ -769,24 +776,25 @@ function exitTile(dir, onDone) {
   if (!tile) { onDone(); return; }
   gsap.killTweensOf(tile);
 
-  const sign = dir > 0 ? 1 : -1; // 1=up/over, -1=down/under
+  const sign = dir > 0 ? 1 : -1;
   const R = ORBIT.radius;
   const state = { angle: 0 };
 
   gsap.to(state, {
     angle: ORBIT.exitAngle,
     duration: ORBIT.exitDur,
-    ease: 'power2.in',
+    // Smooth cinematic ease: slow start, smooth acceleration through the arc
+    ease: 'cubic-bezier(0.4, 0.0, 0.7, 1.0)',
     onUpdate: () => {
       const p = boomPos(state.angle, R, sign);
       const progress = state.angle / ORBIT.exitAngle;
-      // Fade out in the last 40% of the arc
-      const opacity = progress < 0.6 ? 1 : 1 - (progress - 0.6) / 0.4;
+      // Smooth opacity: hold full opacity longer, then gentle fade
+      const opacity = progress < 0.55 ? 1 : Math.cos((progress - 0.55) / 0.45 * Math.PI * 0.5);
       gsap.set(tile, {
         y: p.y,
         z: p.z,
         rotateX: p.rotX,
-        opacity: opacity,
+        opacity: Math.max(0, opacity),
       });
     },
     onComplete: () => { tile.remove(); onDone(); }
@@ -797,7 +805,6 @@ function enterTile(fromDir) {
   const tile = document.querySelector('.tile');
   if (!tile) return;
 
-  // Enter from the opposite side of the arc
   const sign = fromDir > 0 ? -1 : 1;
   const R = ORBIT.radius;
   const state = { angle: ORBIT.enterAngle };
@@ -807,17 +814,18 @@ function enterTile(fromDir) {
   gsap.to(state, {
     angle: 0,
     duration: ORBIT.enterDur,
-    ease: 'power2.out',
+    // Smooth deceleration: glides in and settles gently
+    ease: 'cubic-bezier(0.0, 0.0, 0.2, 1.0)',
     onUpdate: () => {
       const p = boomPos(state.angle, R, sign);
       const progress = state.angle / ORBIT.enterAngle;
-      // Fade in during the first 40% of the arc (when far away)
-      const opacity = progress > 0.6 ? 1 - (progress - 0.6) / 0.4 : 1;
+      // Smooth fade-in: gentle appearance as tile sweeps into view
+      const opacity = progress > 0.65 ? Math.cos((progress - 0.65) / 0.35 * Math.PI * 0.5) : 1;
       gsap.set(tile, {
         y: p.y,
         z: p.z,
         rotateX: p.rotX,
-        opacity: opacity,
+        opacity: Math.max(0, opacity),
       });
     },
     onComplete: () => {
@@ -945,11 +953,12 @@ function spinNav(dir, count) {
     gsap.to(state, {
       angle: exitAngle,
       duration: exitDur,
-      ease: 'power2.in',
+      ease: 'cubic-bezier(0.4, 0.0, 0.7, 1.0)',
       onUpdate: () => {
         const p = boomPos(state.angle, R, sign);
         const prog = state.angle / exitAngle;
-        gsap.set(tile, { y: p.y, z: p.z, rotateX: p.rotX, opacity: prog < 0.5 ? 1 : 1 - (prog - 0.5) * 2 });
+        const op = prog < 0.5 ? 1 : Math.cos((prog - 0.5) * Math.PI);
+        gsap.set(tile, { y: p.y, z: p.z, rotateX: p.rotX, opacity: Math.max(0, op) });
       },
       onComplete: () => {
         tile.remove();
@@ -963,7 +972,7 @@ function spinNav(dir, count) {
           gsap.to(enterState, {
             angle: 0,
             duration: enterDur,
-            ease: 'power2.out',
+            ease: 'cubic-bezier(0.0, 0.0, 0.2, 1.0)',
             onUpdate: () => {
               const p = boomPos(enterState.angle, R, enterSign);
               const prog = enterState.angle / 80;
