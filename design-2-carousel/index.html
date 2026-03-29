@@ -251,7 +251,42 @@ body {
   height: 100%;
   object-fit: cover;
   display: block;
-  /* PURE poster art — no filters, no overlays, no opacity changes */
+  filter: saturate(1.05) contrast(1.02);
+}
+/* Acrylic glass overlay — frosted premium material */
+.acrylic {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius);
+  z-index: 2;
+  pointer-events: none;
+  background:
+    linear-gradient(165deg,
+      rgba(255,255,255,0.18) 0%,
+      rgba(255,255,255,0.04) 30%,
+      rgba(255,255,255,0.0) 50%,
+      rgba(255,255,255,0.03) 70%,
+      rgba(255,255,255,0.12) 100%);
+  backdrop-filter: blur(0.6px) saturate(1.15);
+  -webkit-backdrop-filter: blur(0.6px) saturate(1.15);
+  /* Glass edge highlight */
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.25),
+    inset 0 -1px 0 rgba(0,0,0,0.05),
+    inset 1px 0 0 rgba(255,255,255,0.1),
+    inset -1px 0 0 rgba(255,255,255,0.06);
+}
+/* Subtle glass reflection arc */
+.acrylic::after {
+  content: '';
+  position: absolute;
+  top: 6%;
+  left: 8%;
+  width: 50%;
+  height: 18%;
+  background: linear-gradient(160deg, rgba(255,255,255,0.14) 0%, transparent 100%);
+  border-radius: 50%;
+  filter: blur(8px);
 }
 
 /* Front info bar — year, streaming logos, subcategory (no title) */
@@ -700,10 +735,10 @@ function filterRender(){
   idx=0;renderTile();
 }
 
-function renderTile(){
+function renderTile(keepOld){
   const carousel=document.getElementById('carousel');
-  carousel.textContent='';
-  if(!filtered.length)return;
+  if (!keepOld) carousel.textContent='';
+  if(!filtered.length)return null;
   document.getElementById('counter').textContent=(idx+1)+' / '+filtered.length;
   const m=filtered[idx];
 
@@ -722,6 +757,8 @@ function renderTile(){
   img.src=m.poster;img.alt=m.title+' poster';img.loading='eager';
   img.setAttribute('width','330');img.setAttribute('height','495');
   front.appendChild(img);
+  const acrylic=document.createElement('div');acrylic.className='acrylic';
+  front.appendChild(acrylic);
 
   // Front info bar — year, streaming logos, subcategory
   const infoBar=document.createElement('div');
@@ -830,98 +867,142 @@ function renderTile(){
   // Tap to flip
   tile.addEventListener('click',()=>{ tile.classList.toggle('flipped'); });
 
-  // No entry anim on initial render — handled by enterTile
+  return tile;
 }
 
 // ============================================
-// BOOM ARM ORBITAL TRANSITION
-// The tile is on the end of a fixed-radius boom arm.
-// It arcs upward along a circular path while always
-// facing the viewer (like holding a card overhead).
-// At 0° = face-on. At 90° = directly above, face down.
-// Y and Z follow the circular path; rotateX = angle.
+// VERTICAL ORBITAL SEMI-CIRCLE — Framer 3D Loop style
+// Viewer is at the CENTER of a vertical circle.
+// Tiles orbit around the viewer on a conveyor arc.
+// θ=0 = display (front). Positive θ = up/over. Negative θ = below.
+// SIMULTANEOUS exit + enter for conveyor continuity.
 // ============================================
 const ORBIT = {
-  exitDur: 0.55,
-  enterDur: 0.6,
-  radius: 420,       // boom arm length in px
-  exitAngle: 130,    // degrees — well past overhead (90°)
-  enterAngle: 120,   // degrees — where new tile starts from
+  dur: 0.7,           // total transition duration
+  radius: 380,        // orbital radius
+  exitAngle: 110,     // how far current tile travels (past overhead)
+  enterAngle: 110,    // how far new tile starts below
 };
 
-// Compute boom arm position from angle (degrees)
-// Forward bulge: tile comes TOWARD viewer in early arc, then over and behind
-function boomPos(angleDeg, R, sign) {
+// Vertical circle position. θ=0 = display center.
+// Positive θ = upward arc toward/over viewer.
+// z uses (1-cosθ) so tile approaches viewer as it rises.
+function orbitPos(angleDeg, R, dir) {
   const rad = angleDeg * Math.PI / 180;
-  const bulge = R * 0.45; // forward push amount
+  const sign = dir > 0 ? 1 : -1; // 1=up, -1=down
   return {
-    y: -sign * R * Math.sin(rad),
-    z: -R * (1 - Math.cos(rad)) + bulge * Math.sin(2 * rad),
+    y: sign * -R * Math.sin(rad),
+    z: R * (1 - Math.cos(rad)),
     rotX: sign * angleDeg,
   };
 }
 
-function exitTile(dir, onDone) {
-  const tile = document.querySelector('.tile');
-  if (!tile) { onDone(); return; }
-  gsap.killTweensOf(tile);
-
-  const sign = dir > 0 ? 1 : -1;
-  const R = ORBIT.radius;
-  const state = { angle: 0 };
-
-  gsap.to(state, {
-    angle: ORBIT.exitAngle,
-    duration: ORBIT.exitDur,
-    // Smooth cinematic ease: slow start, smooth acceleration through the arc
-    ease: 'cubic-bezier(0.4, 0.0, 0.7, 1.0)',
-    onUpdate: () => {
-      const p = boomPos(state.angle, R, sign);
-      const progress = state.angle / ORBIT.exitAngle;
-      // Smooth opacity: hold full opacity longer, then gentle fade
-      const opacity = progress < 0.55 ? 1 : Math.cos((progress - 0.55) / 0.45 * Math.PI * 0.5);
-      gsap.set(tile, {
-        y: p.y,
-        z: p.z,
-        rotateX: p.rotX,
-        opacity: Math.max(0, opacity),
-      });
-    },
-    onComplete: () => { tile.remove(); onDone(); }
-  });
+// Smooth cosine fade: holds at 1 then gently drops
+function cosFade(progress, holdUntil) {
+  if (progress < holdUntil) return 1;
+  return Math.cos((progress - holdUntil) / (1 - holdUntil) * Math.PI * 0.5);
 }
 
-function enterTile(fromDir) {
-  const tile = document.querySelector('.tile');
-  if (!tile) return;
+function nav(dir) {
+  if (anim || !filtered.length) return;
+  anim = true;
 
-  const sign = fromDir > 0 ? -1 : 1;
+  const oldTile = document.querySelector('.tile');
   const R = ORBIT.radius;
-  const state = { angle: ORBIT.enterAngle };
 
-  gsap.set(tile, { opacity: 0 });
+  // Prepare next tile (keep old alive for simultaneous animation)
+  idx = (idx + dir + filtered.length) % filtered.length;
+  const newTile = renderTile(true); // keepOld=true
 
-  gsap.to(state, {
-    angle: 0,
-    duration: ORBIT.enterDur,
-    // Smooth deceleration: glides in and settles gently
-    ease: 'cubic-bezier(0.0, 0.0, 0.2, 1.0)',
-    onUpdate: () => {
-      const p = boomPos(state.angle, R, sign);
-      const progress = state.angle / ORBIT.enterAngle;
-      // Smooth fade-in: gentle appearance as tile sweeps into view
-      const opacity = progress > 0.65 ? Math.cos((progress - 0.65) / 0.35 * Math.PI * 0.5) : 1;
-      gsap.set(tile, {
-        y: p.y,
-        z: p.z,
-        rotateX: p.rotX,
-        opacity: Math.max(0, opacity),
+  // If old tile exists, run SIMULTANEOUS exit + enter
+  if (oldTile && newTile && oldTile !== newTile) {
+    gsap.set(newTile, { opacity: 0 });
+    const state = { t: 0 };
+
+    gsap.to(state, {
+      t: 1,
+      duration: ORBIT.dur,
+      ease: 'power2.inOut',
+      onUpdate: () => {
+        const t = state.t;
+
+        // EXIT: current tile sweeps from 0° → exitAngle (up and over)
+        const exitAngle = t * ORBIT.exitAngle;
+        const ep = orbitPos(exitAngle, R, dir);
+        const exitOp = cosFade(t, 0.4);
+        gsap.set(oldTile, {
+          y: ep.y, z: ep.z, rotateX: ep.rotX,
+          opacity: Math.max(0, exitOp),
+        });
+
+        // ENTER: next tile sweeps from -enterAngle → 0° (below into center)
+        const enterAngle = (1 - t) * ORBIT.enterAngle;
+        const np = orbitPos(enterAngle, R, -dir);
+        const enterOp = cosFade(1 - t, 0.4);
+        gsap.set(newTile, {
+          y: np.y, z: np.z, rotateX: np.rotX,
+          opacity: Math.max(0, enterOp),
+        });
+      },
+      onComplete: () => {
+        oldTile.remove();
+        gsap.set(newTile, { y: 0, z: 0, rotateX: 3, opacity: 1, clearProps: 'filter' });
+        anim = false; gestLock = false;
+      }
+    });
+  } else {
+    // No old tile (first render or edge case)
+    if (newTile) gsap.set(newTile, { opacity: 1 });
+    anim = false; gestLock = false;
+  }
+}
+
+// Spin: rapid sequential conveyor steps
+function spinNav(dir, count) {
+  if (anim || !filtered.length) return;
+  anim = true;
+  let i = 0;
+
+  function step() {
+    if (i >= count) { anim = false; gestLock = false; return; }
+
+    const oldTile = document.querySelector('.tile');
+    const R = ORBIT.radius * 0.7;
+    const progress = i / count;
+    const dur = 0.1 + progress * 0.15;
+
+    idx = (idx + dir + filtered.length) % filtered.length;
+    const newTile = renderTile(true);
+
+    if (oldTile && newTile && oldTile !== newTile) {
+      gsap.set(newTile, { opacity: 0 });
+      const state = { t: 0 };
+
+      gsap.to(state, {
+        t: 1,
+        duration: dur,
+        ease: 'power2.inOut',
+        onUpdate: () => {
+          const t = state.t;
+          const ea = t * 100;
+          const ep = orbitPos(ea, R, dir);
+          gsap.set(oldTile, { y: ep.y, z: ep.z, rotateX: ep.rotX, opacity: Math.max(0, 1 - t * 1.5) });
+
+          const na = (1 - t) * 80;
+          const np = orbitPos(na, R, -dir);
+          gsap.set(newTile, { y: np.y, z: np.z, rotateX: np.rotX, opacity: Math.min(1, t * 1.5) });
+        },
+        onComplete: () => {
+          oldTile.remove();
+          gsap.set(newTile, { y: 0, z: 0, rotateX: 3, opacity: 1 });
+          i++; step();
+        }
       });
-    },
-    onComplete: () => {
-      gsap.set(tile, { y: 0, z: 0, rotateX: 3, opacity: 1, clearProps: 'filter' });
+    } else {
+      i++; step();
     }
-  });
+  }
+  step();
 }
 
 // ============================================
@@ -1003,85 +1084,7 @@ document.addEventListener('keydown', e => {
   }
 });
 
-// Single nav: FULL EXIT → tile removed → FULL ENTER (no overlap)
-function nav(dir) {
-  if (anim || !filtered.length) return;
-  anim = true;
-
-  exitTile(dir, () => {
-    // Old tile is already removed by exitTile
-    idx = (idx + dir + filtered.length) % filtered.length;
-    renderTile();
-    enterTile(dir);
-    // Unlock after enter animation completes
-    setTimeout(() => { anim = false; gestLock = false; }, ORBIT.enterDur * 1000 + 50);
-  });
-}
-
-// Spin through multiple: rapid boom-arm arcs — fast and punchy
-function spinNav(dir, count) {
-  if (anim || !filtered.length) return;
-  anim = true;
-  let i = 0;
-  const sign = dir > 0 ? 1 : -1;
-  const R = ORBIT.radius * 0.7; // tighter radius for spin
-
-  function step() {
-    if (i >= count) {
-      anim = false; gestLock = false; return;
-    }
-    const tile = document.querySelector('.tile');
-    if (!tile) { anim = false; gestLock = false; return; }
-
-    const progress = i / count;
-    const exitDur = 0.08 + progress * 0.1;
-    const enterDur = 0.08 + progress * 0.12;
-    const exitAngle = 100 + progress * 20;
-    const state = { angle: 0 };
-
-    gsap.killTweensOf(tile);
-    gsap.to(state, {
-      angle: exitAngle,
-      duration: exitDur,
-      ease: 'cubic-bezier(0.4, 0.0, 0.7, 1.0)',
-      onUpdate: () => {
-        const p = boomPos(state.angle, R, sign);
-        const prog = state.angle / exitAngle;
-        const op = prog < 0.5 ? 1 : Math.cos((prog - 0.5) * Math.PI);
-        gsap.set(tile, { y: p.y, z: p.z, rotateX: p.rotX, opacity: Math.max(0, op) });
-      },
-      onComplete: () => {
-        tile.remove();
-        idx = (idx + dir + filtered.length) % filtered.length;
-        renderTile();
-        const newTile = document.querySelector('.tile');
-        if (newTile && i < count - 1) {
-          const enterState = { angle: 80 };
-          const enterSign = -sign;
-          gsap.set(newTile, { opacity: 0 });
-          gsap.to(enterState, {
-            angle: 0,
-            duration: enterDur,
-            ease: 'cubic-bezier(0.0, 0.0, 0.2, 1.0)',
-            onUpdate: () => {
-              const p = boomPos(enterState.angle, R, enterSign);
-              const prog = enterState.angle / 80;
-              gsap.set(newTile, { y: p.y, z: p.z, rotateX: p.rotX, opacity: prog > 0.5 ? 1 - (prog - 0.5) * 2 : 1 });
-            },
-            onComplete: () => {
-              gsap.set(newTile, { y: 0, z: 0, rotateX: 3, opacity: 1 });
-              i++; step();
-            }
-          });
-        } else {
-          enterTile(dir);
-          setTimeout(() => { i++; step(); }, ORBIT.enterDur * 1000);
-        }
-      }
-    });
-  }
-  step();
-}
+// nav() and spinNav() are defined above in the orbital section
 
 // Shuffle — fewer spins, snappier
 document.getElementById('shuffleBtn').addEventListener('click', () => {
