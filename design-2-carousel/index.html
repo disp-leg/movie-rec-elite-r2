@@ -716,6 +716,217 @@ body {
   text-transform: uppercase;
 }
 
+/* Tab views — scrollable list/grid views */
+.tab-view {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px 20px;
+  -webkit-overflow-scrolling: touch;
+}
+.tab-view-header {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.2px;
+  margin-bottom: 4px;
+}
+.tab-view-sub {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+  letter-spacing: 0.3px;
+}
+.tab-view-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+}
+.tab-view-empty .empty-icon {
+  font-size: 36px;
+  margin-bottom: 12px;
+  opacity: 0.3;
+}
+.tab-view-empty .empty-text {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* Watchlist grid */
+.watch-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.watch-card {
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.5);
+  cursor: pointer;
+  transition: transform 200ms var(--ease), box-shadow 200ms var(--ease);
+}
+.watch-card:active { transform: scale(0.97); }
+.watch-card img {
+  width: 100%;
+  aspect-ratio: 2/3;
+  object-fit: cover;
+  display: block;
+}
+.watch-card-info {
+  padding: 8px 10px;
+}
+.watch-card-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.3;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.watch-card-meta {
+  font-size: 9px;
+  color: var(--text-muted);
+}
+
+/* History list */
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.5);
+  cursor: pointer;
+  transition: transform 200ms var(--ease);
+}
+.history-row:active { transform: scale(0.98); }
+.history-poster {
+  width: 40px;
+  height: 60px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.history-info {
+  flex: 1;
+  min-width: 0;
+}
+.history-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.history-detail {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.history-rating {
+  font-size: 12px;
+  color: var(--accent-bright);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* DNF graveyard */
+.dnf-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.dnf-card {
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+  cursor: pointer;
+  transition: transform 200ms var(--ease);
+}
+.dnf-card:active { transform: scale(0.95); }
+.dnf-card img {
+  width: 100%;
+  aspect-ratio: 2/3;
+  object-fit: cover;
+  display: block;
+  filter: grayscale(0.7) brightness(0.7);
+}
+.dnf-card::after {
+  content: '\2715';
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(200,60,60,0.7);
+  color: #fff;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.dnf-card-title {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16px 6px 6px;
+  background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
+  font-size: 9px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Detail overlay — full-screen movie detail from list views */
+.detail-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+}
+.detail-overlay .detail-card {
+  width: 100%;
+  max-width: 340px;
+  max-height: 80vh;
+  border-radius: var(--radius-lg);
+  overflow-y: auto;
+  background: #f0ede8;
+  background-image: linear-gradient(180deg, #f4f1ec 0%, #ece9e3 50%, #e5e2dc 100%);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.6);
+  padding: 20px 18px;
+}
+
 /* Gesture feedback toast */
 .gesture-toast {
   position: fixed;
@@ -874,6 +1085,11 @@ body {
     <span class="hint-txt">swipe up / down</span>
     <span class="counter-txt" id="counter"></span>
   </div>
+
+  <!-- Tab views (hidden by default, shown when tab is active) -->
+  <div class="tab-view" id="viewWatchlist" style="display:none"></div>
+  <div class="tab-view" id="viewHistory" style="display:none"></div>
+  <div class="tab-view" id="viewDnf" style="display:none"></div>
 
   <!-- Bottom tab bar -->
   <nav class="tab-bar" id="tabBar">
@@ -1583,14 +1799,244 @@ document.getElementById('shuffleBtn').addEventListener('click', () => {
 })();
 
 // ============================================
-// TAB BAR
+// TAB BAR + VIEW RENDERING
 // ============================================
+const carouselEls = ['catNav','carouselArea'].map(id => document.getElementById(id));
+const controlsEl = document.querySelector('.carousel-controls');
+const viewEls = {
+  watchlist: document.getElementById('viewWatchlist'),
+  history: document.getElementById('viewHistory'),
+  dnf: document.getElementById('viewDnf'),
+};
+let activeTab = 'carousel';
+
+function switchTab(tab) {
+  if (tab === activeTab) return;
+  activeTab = tab;
+  playSound('click');
+
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === tab);
+  });
+
+  // Toggle carousel elements
+  const showCarousel = tab === 'carousel';
+  carouselEls.forEach(el => el.style.display = showCarousel ? '' : 'none');
+  controlsEl.style.display = showCarousel ? '' : 'none';
+
+  // Toggle tab views
+  Object.keys(viewEls).forEach(k => {
+    viewEls[k].style.display = k === tab ? '' : 'none';
+  });
+
+  // Render the selected view
+  if (tab === 'watchlist') renderWatchlist();
+  else if (tab === 'history') renderHistory();
+  else if (tab === 'dnf') renderDnf();
+}
+
+function showDetailOverlay(m) {
+  playSound('flip');
+  const overlay = document.createElement('div');
+  overlay.className = 'detail-overlay';
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) { playSound('click'); overlay.remove(); }
+  });
+
+  const card = document.createElement('div');
+  card.className = 'detail-card';
+
+  const title = document.createElement('div');
+  title.className = 'back-title'; title.textContent = m.title;
+  card.appendChild(title);
+
+  const meta = document.createElement('div');
+  meta.className = 'back-meta';
+  const rtMin = m.runtime || 0;
+  const rtStr = rtMin ? Math.floor(rtMin/60)+'h '+(rtMin%60)+'m' : '';
+  meta.appendChild(document.createTextNode(m.year+' \u2022 '+(rtStr?rtStr+' \u2022 ':'')+m.director+' '));
+  const badge = document.createElement('span');
+  badge.className = 'lb-badge'; badge.textContent = '\u2605 '+m.rating;
+  meta.appendChild(badge);
+  card.appendChild(meta);
+
+  const syn = document.createElement('p');
+  syn.className = 'back-synopsis'; syn.textContent = m.synopsis;
+  card.appendChild(syn);
+
+  const qb = document.createElement('div');
+  qb.className = 'quote-block';
+  const q1 = document.createElement('div'); q1.className = 'quote q1'; q1.textContent = m.q1;
+  const q5 = document.createElement('div'); q5.className = 'quote q5'; q5.textContent = m.q5;
+  qb.appendChild(q1); qb.appendChild(q5);
+  card.appendChild(qb);
+
+  const sl = document.createElement('div');
+  sl.className = 'section-lbl'; sl.textContent = 'Stream';
+  card.appendChild(sl);
+  const sg = document.createElement('div');
+  sg.className = 'stream-grid';
+  [...m.streaming,'Dopebox'].forEach(p => {
+    const a = document.createElement('a');
+    a.href = streamUrl(p, m.title); a.target = '_blank'; a.rel = 'noopener noreferrer';
+    a.className = 'stream-link'; a.textContent = p;
+    sg.appendChild(a);
+  });
+  card.appendChild(sg);
+
+  // User rating if exists
+  if (ratings[m.id]) {
+    const rl = document.createElement('div');
+    rl.className = 'section-lbl'; rl.textContent = 'Your Rating';
+    card.appendChild(rl);
+    const stars = document.createElement('div');
+    stars.style.cssText = 'font-size:16px;color:var(--accent-bright);margin-bottom:8px;';
+    stars.textContent = '\u2605'.repeat(ratings[m.id]) + '\u2606'.repeat(5 - ratings[m.id]);
+    card.appendChild(stars);
+  }
+
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+}
+
+function renderWatchlist() {
+  const el = viewEls.watchlist;
+  el.textContent = '';
+
+  const h = document.createElement('div');
+  h.className = 'tab-view-header'; h.textContent = 'Watchlist';
+  el.appendChild(h);
+  const sub = document.createElement('div');
+  sub.className = 'tab-view-sub'; sub.textContent = watchlistArr.length + ' saved for later';
+  el.appendChild(sub);
+
+  if (!watchlistArr.length) {
+    const empty = document.createElement('div');
+    empty.className = 'tab-view-empty';
+    const ico = document.createElement('div');
+    ico.className = 'empty-icon'; ico.textContent = '\uD83D\uDD16';
+    const txt = document.createElement('div');
+    txt.className = 'empty-text'; txt.textContent = 'Long press any tile to save it here';
+    empty.appendChild(ico); empty.appendChild(txt);
+    el.appendChild(empty);
+    return;
+  }
+
+  const grid = document.createElement('div');
+  grid.className = 'watch-grid';
+  watchlistArr.forEach(m => {
+    const card = document.createElement('div');
+    card.className = 'watch-card';
+    card.addEventListener('click', () => showDetailOverlay(m));
+    const img = document.createElement('img');
+    img.src = m.poster; img.alt = m.title; img.loading = 'lazy';
+    card.appendChild(img);
+    const info = document.createElement('div');
+    info.className = 'watch-card-info';
+    const t = document.createElement('div');
+    t.className = 'watch-card-title'; t.textContent = m.title;
+    const meta = document.createElement('div');
+    meta.className = 'watch-card-meta'; meta.textContent = m.year + ' \u2022 \u2605' + m.rating;
+    info.appendChild(t); info.appendChild(meta);
+    card.appendChild(info);
+    grid.appendChild(card);
+  });
+  el.appendChild(grid);
+}
+
+function renderHistory() {
+  const el = viewEls.history;
+  el.textContent = '';
+
+  const h = document.createElement('div');
+  h.className = 'tab-view-header'; h.textContent = 'History';
+  el.appendChild(h);
+  const sub = document.createElement('div');
+  sub.className = 'tab-view-sub'; sub.textContent = historyArr.length + ' watched';
+  el.appendChild(sub);
+
+  if (!historyArr.length) {
+    const empty = document.createElement('div');
+    empty.className = 'tab-view-empty';
+    const ico = document.createElement('div');
+    ico.className = 'empty-icon'; ico.textContent = '\uD83D\uDC41';
+    const txt = document.createElement('div');
+    txt.className = 'empty-text'; txt.textContent = 'Swipe right on tiles to mark as watched';
+    empty.appendChild(ico); empty.appendChild(txt);
+    el.appendChild(empty);
+    return;
+  }
+
+  const list = document.createElement('div');
+  list.className = 'history-list';
+  historyArr.forEach(m => {
+    const row = document.createElement('div');
+    row.className = 'history-row';
+    row.addEventListener('click', () => showDetailOverlay(m));
+    const img = document.createElement('img');
+    img.className = 'history-poster'; img.src = m.poster; img.alt = m.title; img.loading = 'lazy';
+    row.appendChild(img);
+    const info = document.createElement('div');
+    info.className = 'history-info';
+    const t = document.createElement('div');
+    t.className = 'history-title'; t.textContent = m.title;
+    const d = document.createElement('div');
+    d.className = 'history-detail'; d.textContent = m.year + ' \u2022 ' + m.director;
+    info.appendChild(t); info.appendChild(d);
+    row.appendChild(info);
+    const r = document.createElement('div');
+    r.className = 'history-rating';
+    r.textContent = ratings[m.id] ? '\u2605'.repeat(ratings[m.id]) : '\u2605' + m.rating;
+    row.appendChild(r);
+    list.appendChild(row);
+  });
+  el.appendChild(list);
+}
+
+function renderDnf() {
+  const el = viewEls.dnf;
+  el.textContent = '';
+
+  const h = document.createElement('div');
+  h.className = 'tab-view-header'; h.textContent = 'DNF';
+  el.appendChild(h);
+  const sub = document.createElement('div');
+  sub.className = 'tab-view-sub'; sub.textContent = dnfArr.length + ' in the graveyard';
+  el.appendChild(sub);
+
+  if (!dnfArr.length) {
+    const empty = document.createElement('div');
+    empty.className = 'tab-view-empty';
+    const ico = document.createElement('div');
+    ico.className = 'empty-icon'; ico.textContent = '\uD83E\uDEA6';
+    const txt = document.createElement('div');
+    txt.className = 'empty-text'; txt.textContent = 'Swipe left to kill a movie forever';
+    empty.appendChild(ico); empty.appendChild(txt);
+    el.appendChild(empty);
+    return;
+  }
+
+  const grid = document.createElement('div');
+  grid.className = 'dnf-grid';
+  dnfArr.forEach(m => {
+    const card = document.createElement('div');
+    card.className = 'dnf-card';
+    card.addEventListener('click', () => showDetailOverlay(m));
+    const img = document.createElement('img');
+    img.src = m.poster; img.alt = m.title; img.loading = 'lazy';
+    card.appendChild(img);
+    const t = document.createElement('div');
+    t.className = 'dnf-card-title'; t.textContent = m.title;
+    card.appendChild(t);
+    grid.appendChild(card);
+  });
+  el.appendChild(grid);
+}
+
 document.getElementById('tabBar').addEventListener('click', e => {
   const btn = e.target.closest('.tab-btn');
   if (!btn) return;
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  // Future: switch views based on btn.dataset.tab
+  switchTab(btn.dataset.tab);
 });
 
 // ============================================
