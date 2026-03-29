@@ -831,6 +831,7 @@ body {
     <div class="intro-text">The Terror Must Be<br>In English</div>
     <div class="waveform" id="waveform"></div>
   </div>
+  <audio id="introAudio" preload="auto"></audio>
 </div>
 
 <canvas id="scene-canvas"></canvas>
@@ -900,26 +901,26 @@ body {
 // DATA
 // ============================================
 const movies = [
-{id:1,title:"Right at Your Door",year:2006,director:"Chris Gorak",tier:"direct",poster:"https://image.tmdb.org/t/p/w500/sBkCtdpkWRiisQ3vzyNOZ72biCB.jpg",synopsis:"Dirty bomb hits LA; husband seals himself inside the house while wife is outside. Claustrophobic domestic apocalypse tension.",streaming:["Tubi","Pluto TV"],rating:3.1,q1:"\u2605 \"A marriage stress-test disguised as a low-budget LA panic nightmare, and somehow the marriage loses.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"Sealed my husband outside during a gas leak once. Didn\u2019t realise this movie was a how-to guide.\""},
-{id:2,title:"Hidden",year:2015,director:"Matt Duffer, Ross Duffer",tier:"direct",poster:"https://image.tmdb.org/t/p/w500/mPuaHaczkoJDzlYD9GyXiDjMXig.jpg",synopsis:"Family hiding in a bunker after an outbreak. Pre-Stranger Things Duffer Brothers. Claustrophobic survival with a twist ending.",streaming:["Netflix","Amazon Prime"],rating:3.1,q1:"\u2605 \"The only way this movie should be watched is split into 10 parts with subway surfers covering half the screen.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"The twist absolutely EATS!!!! i was having a fine time for most of it but when the reveal happens OOHHHHH SUDDENLY ITS ALL WORTH IT\""},
-{id:3,title:"Carriers",year:2009,director:"Alex Pastor, David Pastor",tier:"direct",poster:"https://image.tmdb.org/t/p/w500/jxjnjHtHXgvjdhkwpelE9ZwVMg6.jpg",synopsis:"Four survivors navigate a pandemic wasteland with strict rules to avoid infection. Moral decay under survival pressure.",streaming:["Amazon Prime","Tubi"],rating:2.8,q1:"\u2605 \"Could have been called \u2018How To Be An Asshole at The End Of The World\u2019 and saved everyone 84 minutes of their lives.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"I hate this fucking movie and every god damn thing about it but I\u2019ve watched it four times so make of that what you will.\""},
-{id:4,title:"It Comes at Night",year:2017,director:"Trey Edward Shults",tier:"direct",poster:"https://image.tmdb.org/t/p/w500/rNKJpFMlOZn5zkzBPZxEJrQn5Km.jpg",synopsis:"Family boarded up during an unspecified plague. Another family arrives. Trust erodes into paranoia and violence.",streaming:["Netflix","Amazon Prime"],rating:3.1,q1:"\u2605 \"I can\u2019t tell what was worse \u2014 never finding out what comes at night, or the aspect ratio.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"Anyone else losing their entire fucking mind\""},
-{id:5,title:"Await Further Instructions",year:2018,director:"Johnny Kevorkian",tier:"direct",poster:"https://image.tmdb.org/t/p/w500/afvi5tVi5S3Ux9faZaI32SmPRkj.jpg",synopsis:"Family trapped on Christmas Day by a mysterious barricade. TV gives increasingly sinister instructions.",streaming:["Netflix","Shudder"],rating:2.5,q1:"\u2605 \"The writer of this film should be sent to prison. Not metaphorically. Actual prison.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"A Christmas movie about a racist family being eaten by their television. I will be revisiting this every December.\""},
-{id:6,title:"Coherence",year:2013,director:"James Ward Byrkit",tier:"claustrophobic",poster:"https://image.tmdb.org/t/p/w500/ezUtb9m5DeLwL2gxi4gktzNCvQv.jpg",synopsis:"Dinner party goes wrong when a comet passes overhead. Reality fractures. Shot in a single house with improvised dialogue.",streaming:["Amazon Prime","Tubi"],rating:3.7,q1:"\u2605 \"The Blair Witch Project for insufferable yuppies who own too many wine glasses.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"If there are a million different realities, I have slept with your wife in every single one of them.\""},
-{id:7,title:"Pontypool",year:2008,director:"Bruce McDonald",tier:"claustrophobic",poster:"https://image.tmdb.org/t/p/w500/uh4n9FSYYaeOWchP8gBPNtg7kD7.jpg",synopsis:"Radio DJ trapped in his station as a virus spreads through the English language. The horror is in what you hear.",streaming:["Shudder","Tubi"],rating:3.3,q1:"\u2605 \"Hilarious that a film about radio DJs can\u2019t even get the vocals on the right frequency. Truly committed to the bit.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"What if Night of the Living Dead was a locked-in War of the Worlds radio play starring Kawartha Lakes\u2019 Howard Stern? Perfection.\""},
-{id:8,title:"The Platform",year:2019,director:"Galder Gaztelu-Urrutia",tier:"claustrophobic",poster:"https://image.tmdb.org/t/p/w500/iXvQnzy6JCAx1PiQEKXuTY04ZHl.jpg",synopsis:"Vertical prison where food descends level by level. Upper floors feast; lower floors starve. Brutal social allegory.",streaming:["Netflix"],rating:3.4,q1:"\u2605 \"I was with it and then it ended and now I\u2019m mad. I wanted to throw up and I didn\u2019t even get an explanation. So dumb.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"This is the most fucked up Mukbang I\u2019ve ever seen and I genuinely cannot stop thinking about it.\""},
-{id:9,title:"Exam",year:2009,director:"Stuart Hazeldine",tier:"claustrophobic",poster:"https://image.tmdb.org/t/p/w500/i1J2zBCyOQJKsQipqJ0qXERC1Ma.jpg",synopsis:"Eight candidates in a single room for a final job interview. One question, 80 minutes, strict rules.",streaming:["Tubi","Amazon Prime"],rating:3.3,q1:"\u2605 \"Eight people locked in a room fail to ask a question for 90 minutes. Truly the most realistic job interview ever filmed.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"SAW for people who love riddles and there\u2019s no gore at all, which means it\u2019s somehow more disturbing than SAW.\""},
-{id:10,title:"The Bar",year:2017,director:"Alex de la Iglesia",tier:"claustrophobic",poster:"https://image.tmdb.org/t/p/w500/vYyALnKnzHLv4PoU2b447GYT8R9.jpg",synopsis:"Patrons trapped in a Madrid bar after a sniper kills anyone who exits. Paranoia mounts as they turn on each other.",streaming:["Netflix","Amazon Prime"],rating:3.0,q1:"\u2605 \"Starts as a clever absurdist siege thriller and ends as a loud, boring descent into a sewer. Literally.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"People trapped in a Madrid bar after a shooting. Devolved into full Lord of the Flies within 20 minutes. This is peak cinema.\""},
-{id:11,title:"Circle",year:2015,director:"Aaron Hann, Mario Miscione",tier:"survival",poster:"https://image.tmdb.org/t/p/w500/hbIL53MdZFJXsgxXaSOVuApWTs8.jpg",synopsis:"50 strangers in a circle. Every 2 minutes, one dies by group vote. Pure survival psychology.",streaming:["Netflix","Tubi"],rating:2.9,q1:"\u2605 \"50 people slowly eliminate each other with no explanation and I eliminated myself from the couch after 30 minutes.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"What a shitty prize. You get to live on an earth populated by the orphans, pregnant women, and other assholes humanity voted to keep.\""},
-{id:12,title:"Would You Rather",year:2012,director:"David Guy Levy",tier:"survival",poster:"https://image.tmdb.org/t/p/w500/tos5MpjaOsAFVGjjieQlZsHlbd.jpg",synopsis:"Desperate guests at a rich man\u2019s dinner party forced into increasingly brutal choices.",streaming:["Tubi","Amazon Prime"],rating:2.8,q1:"\u2605 \"The good thing about this film is it goes quickly. The bad thing is it exists.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"My favourite part was when she forgot she had been stabbed. Method acting in reverse.\""},
-{id:13,title:"Fermat\u2019s Room",year:2007,director:"Luis Piedrahita, Rodrigo Sope\u00f1a",tier:"survival",poster:"https://image.tmdb.org/t/p/w500/qQcYvPXxvk6bQDV9Zgd6cnDQmKZ.jpg",synopsis:"Four mathematicians locked in a room that shrinks unless they solve puzzles.",streaming:["Amazon Prime","Tubi"],rating:3.2,q1:"\u2605 \"WHAT HAPPENS ON THE GODDAMN BOAT?! This film\u2019s worst sin is attempting intelligence and landing at kindergarten.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"My guy was going to kill four people and himself over math. It\u2019s not that deep bro. And yet I respect him completely.\""},
-{id:14,title:"Level 16",year:2018,director:"Danishka Esterhazy",tier:"survival",poster:"https://image.tmdb.org/t/p/w500/glVIjhLmzmgtppLWb3lvnoPljGW.jpg",synopsis:"Girls in a mysterious boarding school discover the horrifying purpose of their captivity.",streaming:["Shudder","Tubi"],rating:3.0,q1:"\u2605 \"Timely and interminable. A Handmaid\u2019s Tale riff that forgot to include anything happening.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"A very clever little Black Mirror riff that made me feel genuinely unsafe in my own bedroom and I live alone.\""},
-{id:15,title:"The Incident",year:2014,director:"Isaac Ezban",tier:"survival",poster:"https://image.tmdb.org/t/p/w500/idb1ACZCQAsYJCFMfs9vgyBIbP1.jpg",synopsis:"Two groups trapped in infinite loops \u2014 one in a stairwell, one on a highway. Existential claustrophobia.",streaming:["Amazon Prime","Tubi"],rating:3.1,q1:"\u2605 \"What was that incident?! The incident was this movie being made and nobody warning me.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"A sci-fi horror masterclass in breaking your heart and stealing your sanity. The weight of infinity before your eyes. I am not okay.\""},
-{id:16,title:"Pandorum",year:2009,director:"Christian Alvart",tier:"adjacent",poster:"https://image.tmdb.org/t/p/w500/mNMfa6r3pl0EzFIKEkVcxyr6Rc7.jpg",synopsis:"Crew wakes on a spaceship with no memory. Something is hunting them in the dark.",streaming:["Amazon Prime","Tubi"],rating:3.2,q1:"\u2605 \"I\u2019ve never been more confused in my life and I once took an Ambien and watched Tenet.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"Basically two films in one and both of them slap. Criminally underseen. Dennis Quaid deserved a sequel and a raise.\""},
-{id:17,title:"The Void",year:2016,director:"Jeremy Gillespie, Steven Kostanski",tier:"adjacent",poster:"https://image.tmdb.org/t/p/w500/2WhZAPi3vomEQdzAPIYTvmvWaxI.jpg",synopsis:"People trapped in a hospital surrounded by cultists. Cosmic horror seeps in.",streaming:["Shudder","Tubi"],rating:3.0,q1:"\u2605 \"This warmed-over Lovecraft nonsense is exactly the dull fate this protagonist deserves, and somehow also me for watching it.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"Grim, forlorn dankness, extraterrestrial gods, cultists with knives, and XTREME Carpenter worship. This is everything. I am fed.\""},
-{id:18,title:"Breathing Room",year:2008,director:"John Suits, Gabriel Cowan",tier:"adjacent",poster:"https://image.tmdb.org/t/p/w500/aaz4rgsEjApkUz87OrFT6sNZDks.jpg",synopsis:"Strangers wake in a locked white room wearing explosive collars. Must figure out the rules or die.",streaming:["Tubi"],rating:2.4,q1:"\u2605 \"Found this in a 10 for $1 used DVD bin. Ten cents feels like maybe a bit much.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"A not-as-good version of Exam, which is a compliment, because Exam is incredible and this one still broke my brain on a Tuesday.\""},
-{id:19,title:"The Hole",year:2001,director:"Nick Hamm",tier:"adjacent",poster:"https://image.tmdb.org/t/p/w500/n5aMoI6AZLJzUoNbjMj0P60EYMJ.jpg",synopsis:"Four teens lock themselves in a WWII bunker for a party weekend. Things go wrong.",streaming:["Amazon Prime"],rating:2.9,q1:"\u2605 \"The DVD cover says \u2018super scary. brilliant.\u2019 which is obviously a lie written by someone who has never met either of those things.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"Thora Birch locked her friends in an underground bunker to steal a boy and it almost worked. Respect the commitment to the bit.\""},
-{id:20,title:"The Bunker",year:2024,director:"Adrian Langley",tier:"adjacent",poster:"https://image.tmdb.org/t/p/w500/jOA7chFPVzSyPp2DaRg8hqA1BHr.jpg",synopsis:"Survivors in a bunker after nuclear event. Resources dwindle, tensions rise, paranoia sets in.",streaming:["Tubi","Amazon Prime"],rating:2.6,q1:"\u2605 \"The shit I will sit through for Tobin Bell and Tony Todd. And this is where that journey ends.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"The whole film is one long Zoom call about a bioweapon and somehow that\u2019s exactly what I needed on a Friday night.\""}
+{id:1,title:"Right at Your Door",year:2006,director:"Chris Gorak",tier:"direct",poster:"https://image.tmdb.org/t/p/w500/sBkCtdpkWRiisQ3vzyNOZ72biCB.jpg",synopsis:"Dirty bomb hits LA; husband seals himself inside the house while wife is outside. Claustrophobic domestic apocalypse tension.",streaming:["Tubi","Pluto TV"],rating:3.1,runtime:96,q1:"\u2605 \"A marriage stress-test disguised as a low-budget LA panic nightmare, and somehow the marriage loses.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"Sealed my husband outside during a gas leak once. Didn\u2019t realise this movie was a how-to guide.\""},
+{id:2,title:"Hidden",year:2015,director:"Matt Duffer, Ross Duffer",tier:"direct",poster:"https://image.tmdb.org/t/p/w500/mPuaHaczkoJDzlYD9GyXiDjMXig.jpg",synopsis:"Family hiding in a bunker after an outbreak. Pre-Stranger Things Duffer Brothers. Claustrophobic survival with a twist ending.",streaming:["Netflix","Amazon Prime"],rating:3.1,runtime:84,q1:"\u2605 \"The only way this movie should be watched is split into 10 parts with subway surfers covering half the screen.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"The twist absolutely EATS!!!! i was having a fine time for most of it but when the reveal happens OOHHHHH SUDDENLY ITS ALL WORTH IT\""},
+{id:3,title:"Carriers",year:2009,director:"Alex Pastor, David Pastor",tier:"direct",poster:"https://image.tmdb.org/t/p/w500/jxjnjHtHXgvjdhkwpelE9ZwVMg6.jpg",synopsis:"Four survivors navigate a pandemic wasteland with strict rules to avoid infection. Moral decay under survival pressure.",streaming:["Amazon Prime","Tubi"],rating:2.8,runtime:84,q1:"\u2605 \"Could have been called \u2018How To Be An Asshole at The End Of The World\u2019 and saved everyone 84 minutes of their lives.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"I hate this fucking movie and every god damn thing about it but I\u2019ve watched it four times so make of that what you will.\""},
+{id:4,title:"It Comes at Night",year:2017,director:"Trey Edward Shults",tier:"direct",poster:"https://image.tmdb.org/t/p/w500/rNKJpFMlOZn5zkzBPZxEJrQn5Km.jpg",synopsis:"Family boarded up during an unspecified plague. Another family arrives. Trust erodes into paranoia and violence.",streaming:["Netflix","Amazon Prime"],rating:3.1,runtime:91,q1:"\u2605 \"I can\u2019t tell what was worse \u2014 never finding out what comes at night, or the aspect ratio.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"Anyone else losing their entire fucking mind\""},
+{id:5,title:"Await Further Instructions",year:2018,director:"Johnny Kevorkian",tier:"direct",poster:"https://image.tmdb.org/t/p/w500/afvi5tVi5S3Ux9faZaI32SmPRkj.jpg",synopsis:"Family trapped on Christmas Day by a mysterious barricade. TV gives increasingly sinister instructions.",streaming:["Netflix","Shudder"],rating:2.5,runtime:91,q1:"\u2605 \"The writer of this film should be sent to prison. Not metaphorically. Actual prison.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"A Christmas movie about a racist family being eaten by their television. I will be revisiting this every December.\""},
+{id:6,title:"Coherence",year:2013,director:"James Ward Byrkit",tier:"claustrophobic",poster:"https://image.tmdb.org/t/p/w500/ezUtb9m5DeLwL2gxi4gktzNCvQv.jpg",synopsis:"Dinner party goes wrong when a comet passes overhead. Reality fractures. Shot in a single house with improvised dialogue.",streaming:["Amazon Prime","Tubi"],rating:3.7,runtime:89,q1:"\u2605 \"The Blair Witch Project for insufferable yuppies who own too many wine glasses.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"If there are a million different realities, I have slept with your wife in every single one of them.\""},
+{id:7,title:"Pontypool",year:2008,director:"Bruce McDonald",tier:"claustrophobic",poster:"https://image.tmdb.org/t/p/w500/uh4n9FSYYaeOWchP8gBPNtg7kD7.jpg",synopsis:"Radio DJ trapped in his station as a virus spreads through the English language. The horror is in what you hear.",streaming:["Shudder","Tubi"],rating:3.3,runtime:93,q1:"\u2605 \"Hilarious that a film about radio DJs can\u2019t even get the vocals on the right frequency. Truly committed to the bit.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"What if Night of the Living Dead was a locked-in War of the Worlds radio play starring Kawartha Lakes\u2019 Howard Stern? Perfection.\""},
+{id:8,title:"The Platform",year:2019,director:"Galder Gaztelu-Urrutia",tier:"claustrophobic",poster:"https://image.tmdb.org/t/p/w500/iXvQnzy6JCAx1PiQEKXuTY04ZHl.jpg",synopsis:"Vertical prison where food descends level by level. Upper floors feast; lower floors starve. Brutal social allegory.",streaming:["Netflix"],rating:3.4,runtime:94,q1:"\u2605 \"I was with it and then it ended and now I\u2019m mad. I wanted to throw up and I didn\u2019t even get an explanation. So dumb.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"This is the most fucked up Mukbang I\u2019ve ever seen and I genuinely cannot stop thinking about it.\""},
+{id:9,title:"Exam",year:2009,director:"Stuart Hazeldine",tier:"claustrophobic",poster:"https://image.tmdb.org/t/p/w500/i1J2zBCyOQJKsQipqJ0qXERC1Ma.jpg",synopsis:"Eight candidates in a single room for a final job interview. One question, 80 minutes, strict rules.",streaming:["Tubi","Amazon Prime"],rating:3.3,runtime:101,q1:"\u2605 \"Eight people locked in a room fail to ask a question for 90 minutes. Truly the most realistic job interview ever filmed.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"SAW for people who love riddles and there\u2019s no gore at all, which means it\u2019s somehow more disturbing than SAW.\""},
+{id:10,title:"The Bar",year:2017,director:"Alex de la Iglesia",tier:"claustrophobic",poster:"https://image.tmdb.org/t/p/w500/vYyALnKnzHLv4PoU2b447GYT8R9.jpg",synopsis:"Patrons trapped in a Madrid bar after a sniper kills anyone who exits. Paranoia mounts as they turn on each other.",streaming:["Netflix","Amazon Prime"],rating:3.0,runtime:102,q1:"\u2605 \"Starts as a clever absurdist siege thriller and ends as a loud, boring descent into a sewer. Literally.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"People trapped in a Madrid bar after a shooting. Devolved into full Lord of the Flies within 20 minutes. This is peak cinema.\""},
+{id:11,title:"Circle",year:2015,director:"Aaron Hann, Mario Miscione",tier:"survival",poster:"https://image.tmdb.org/t/p/w500/hbIL53MdZFJXsgxXaSOVuApWTs8.jpg",synopsis:"50 strangers in a circle. Every 2 minutes, one dies by group vote. Pure survival psychology.",streaming:["Netflix","Tubi"],rating:2.9,runtime:87,q1:"\u2605 \"50 people slowly eliminate each other with no explanation and I eliminated myself from the couch after 30 minutes.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"What a shitty prize. You get to live on an earth populated by the orphans, pregnant women, and other assholes humanity voted to keep.\""},
+{id:12,title:"Would You Rather",year:2012,director:"David Guy Levy",tier:"survival",poster:"https://image.tmdb.org/t/p/w500/tos5MpjaOsAFVGjjieQlZsHlbd.jpg",synopsis:"Desperate guests at a rich man\u2019s dinner party forced into increasingly brutal choices.",streaming:["Tubi","Amazon Prime"],rating:2.8,runtime:93,q1:"\u2605 \"The good thing about this film is it goes quickly. The bad thing is it exists.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"My favourite part was when she forgot she had been stabbed. Method acting in reverse.\""},
+{id:13,title:"Fermat\u2019s Room",year:2007,director:"Luis Piedrahita, Rodrigo Sope\u00f1a",tier:"survival",poster:"https://image.tmdb.org/t/p/w500/qQcYvPXxvk6bQDV9Zgd6cnDQmKZ.jpg",synopsis:"Four mathematicians locked in a room that shrinks unless they solve puzzles.",streaming:["Amazon Prime","Tubi"],rating:3.2,runtime:88,q1:"\u2605 \"WHAT HAPPENS ON THE GODDAMN BOAT?! This film\u2019s worst sin is attempting intelligence and landing at kindergarten.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"My guy was going to kill four people and himself over math. It\u2019s not that deep bro. And yet I respect him completely.\""},
+{id:14,title:"Level 16",year:2018,director:"Danishka Esterhazy",tier:"survival",poster:"https://image.tmdb.org/t/p/w500/glVIjhLmzmgtppLWb3lvnoPljGW.jpg",synopsis:"Girls in a mysterious boarding school discover the horrifying purpose of their captivity.",streaming:["Shudder","Tubi"],rating:3.0,runtime:90,q1:"\u2605 \"Timely and interminable. A Handmaid\u2019s Tale riff that forgot to include anything happening.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"A very clever little Black Mirror riff that made me feel genuinely unsafe in my own bedroom and I live alone.\""},
+{id:15,title:"The Incident",year:2014,director:"Isaac Ezban",tier:"survival",poster:"https://image.tmdb.org/t/p/w500/idb1ACZCQAsYJCFMfs9vgyBIbP1.jpg",synopsis:"Two groups trapped in infinite loops \u2014 one in a stairwell, one on a highway. Existential claustrophobia.",streaming:["Amazon Prime","Tubi"],rating:3.1,runtime:100,q1:"\u2605 \"What was that incident?! The incident was this movie being made and nobody warning me.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"A sci-fi horror masterclass in breaking your heart and stealing your sanity. The weight of infinity before your eyes. I am not okay.\""},
+{id:16,title:"Pandorum",year:2009,director:"Christian Alvart",tier:"adjacent",poster:"https://image.tmdb.org/t/p/w500/mNMfa6r3pl0EzFIKEkVcxyr6Rc7.jpg",synopsis:"Crew wakes on a spaceship with no memory. Something is hunting them in the dark.",streaming:["Amazon Prime","Tubi"],rating:3.2,runtime:108,q1:"\u2605 \"I\u2019ve never been more confused in my life and I once took an Ambien and watched Tenet.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"Basically two films in one and both of them slap. Criminally underseen. Dennis Quaid deserved a sequel and a raise.\""},
+{id:17,title:"The Void",year:2016,director:"Jeremy Gillespie, Steven Kostanski",tier:"adjacent",poster:"https://image.tmdb.org/t/p/w500/2WhZAPi3vomEQdzAPIYTvmvWaxI.jpg",synopsis:"People trapped in a hospital surrounded by cultists. Cosmic horror seeps in.",streaming:["Shudder","Tubi"],rating:3.0,runtime:90,q1:"\u2605 \"This warmed-over Lovecraft nonsense is exactly the dull fate this protagonist deserves, and somehow also me for watching it.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"Grim, forlorn dankness, extraterrestrial gods, cultists with knives, and XTREME Carpenter worship. This is everything. I am fed.\""},
+{id:18,title:"Breathing Room",year:2008,director:"John Suits, Gabriel Cowan",tier:"adjacent",poster:"https://image.tmdb.org/t/p/w500/aaz4rgsEjApkUz87OrFT6sNZDks.jpg",synopsis:"Strangers wake in a locked white room wearing explosive collars. Must figure out the rules or die.",streaming:["Tubi"],rating:2.4,runtime:80,q1:"\u2605 \"Found this in a 10 for $1 used DVD bin. Ten cents feels like maybe a bit much.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"A not-as-good version of Exam, which is a compliment, because Exam is incredible and this one still broke my brain on a Tuesday.\""},
+{id:19,title:"The Hole",year:2001,director:"Nick Hamm",tier:"adjacent",poster:"https://image.tmdb.org/t/p/w500/n5aMoI6AZLJzUoNbjMj0P60EYMJ.jpg",synopsis:"Four teens lock themselves in a WWII bunker for a party weekend. Things go wrong.",streaming:["Amazon Prime"],rating:2.9,runtime:102,q1:"\u2605 \"The DVD cover says \u2018super scary. brilliant.\u2019 which is obviously a lie written by someone who has never met either of those things.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"Thora Birch locked her friends in an underground bunker to steal a boy and it almost worked. Respect the commitment to the bit.\""},
+{id:20,title:"The Bunker",year:2024,director:"Adrian Langley",tier:"adjacent",poster:"https://image.tmdb.org/t/p/w500/jOA7chFPVzSyPp2DaRg8hqA1BHr.jpg",synopsis:"Survivors in a bunker after nuclear event. Resources dwindle, tensions rise, paranoia sets in.",streaming:["Tubi","Amazon Prime"],rating:2.6,runtime:89,q1:"\u2605 \"The shit I will sit through for Tobin Bell and Tony Todd. And this is where that journey ends.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"The whole film is one long Zoom call about a bioweapon and somehow that\u2019s exactly what I needed on a Friday night.\""}
 ];
 
 // SVG icons — thin Phosphor-style lines
@@ -1033,7 +1034,9 @@ function renderTile(keepOld){
 
   const bt=document.createElement('div');bt.className='back-title';bt.textContent=m.title;
   const bm=document.createElement('div');bm.className='back-meta';
-  bm.appendChild(document.createTextNode(m.year+' \u2022 '+m.director+' '));
+  const rtMin = m.runtime || 0;
+  const rtStr = rtMin ? Math.floor(rtMin/60)+'h '+(rtMin%60)+'m' : '';
+  bm.appendChild(document.createTextNode(m.year+' \u2022 '+(rtStr ? rtStr+' \u2022 ' : '')+m.director+' '));
   const lb=document.createElement('span');lb.className='lb-badge';lb.textContent='\u2605 '+m.rating;
   bm.appendChild(lb);
   back.appendChild(bt);back.appendChild(bm);
@@ -1057,29 +1060,17 @@ function renderTile(keepOld){
   });
   back.appendChild(sg);
 
-  // YOUR TAKE — merged actions + rating in one section
+  // YOUR TAKE — stars + action buttons (Watched, Save, DNF)
   const yt=document.createElement('div');yt.className='your-take';
-  const ytl=document.createElement('div');ytl.className='section-lbl';ytl.textContent='Your Take';
+  const ytl=document.createElement('div');ytl.className='section-lbl';ytl.textContent='Rate';
   yt.appendChild(ytl);
-  const ar=document.createElement('div');ar.className='take-row';
-  [{k:'love',i:IC.heart,l:'Love'},{k:'seen',i:IC.eye,l:'Watched'},{k:'save',i:IC.mark,l:'Save'}].forEach(a=>{
-    const btn=document.createElement('button');btn.className='act-btn'+(actions[m.id]===a.k?' on':'');
-    btn.setAttribute('aria-label',a.l);btn.setAttribute('aria-pressed',actions[m.id]===a.k?'true':'false');
-    btn.appendChild(svgEl(a.i));
-    btn.addEventListener('click',e=>{e.stopPropagation();
-      const was=actions[m.id]===a.k;actions[m.id]=was?null:a.k;
-      ar.querySelectorAll('.act-btn').forEach(b=>{b.classList.remove('on');b.setAttribute('aria-pressed','false');});
-      if(!was){btn.classList.add('on');btn.setAttribute('aria-pressed','true');}
-    });
-    ar.appendChild(btn);
-  });
-  yt.appendChild(ar);
   const sr=document.createElement('div');sr.className='star-row';
   for(let i=1;i<=5;i++){
     const sb=document.createElement('button');sb.className='star-btn'+((ratings[m.id]||0)>=i?' on':'');
     sb.setAttribute('aria-label',i+' star'+(i>1?'s':''));
     sb.appendChild(svgEl((ratings[m.id]||0)>=i?IC.starF:IC.star));
     sb.addEventListener('click',e=>{e.stopPropagation();
+      playSound('click');
       ratings[m.id]=ratings[m.id]===i?0:i;
       sr.querySelectorAll('.star-btn').forEach((s,j)=>{
         const on=j<(ratings[m.id]||0);s.className='star-btn'+(on?' on':'');
@@ -1089,6 +1080,26 @@ function renderTile(keepOld){
     sr.appendChild(sb);
   }
   yt.appendChild(sr);
+  const ar=document.createElement('div');ar.className='take-row';
+  [{k:'seen',i:IC.eye,l:'Watched',act:'watched'},{k:'save',i:IC.mark,l:'Save',act:'save'},{k:'dnf',i:IC.down,l:'DNF',act:'dnf'}].forEach(a=>{
+    const btn=document.createElement('button');btn.className='act-btn'+(actions[m.id]===a.k?' on':'');
+    btn.setAttribute('aria-label',a.l);
+    btn.appendChild(svgEl(a.i));
+    btn.addEventListener('click',e=>{
+      e.stopPropagation();
+      playSound('click');
+      // Flip back first, then perform the swipe action
+      const tile = btn.closest('.tile');
+      if (tile && tile.classList.contains('flipped')) {
+        tile.classList.remove('flipped');
+        setTimeout(() => swipeAction(a.act), 400);
+      } else {
+        swipeAction(a.act);
+      }
+    });
+    ar.appendChild(btn);
+  });
+  yt.appendChild(ar);
   back.appendChild(yt);
 
   // Slab 3D edge faces — real geometry
@@ -1548,7 +1559,6 @@ document.getElementById('shuffleBtn').addEventListener('click', () => {
   for (let i = 0; i < barCount; i++) {
     const bar = document.createElement('div');
     bar.className = 'waveform-bar';
-    // Voice-like waveform: louder in center, quieter at edges
     const center = Math.abs(i - barCount / 2) / (barCount / 2);
     const maxH = Math.round(8 + (1 - center) * 20 + Math.random() * 6);
     bar.style.setProperty('--bar-h', maxH + 'px');
@@ -1557,7 +1567,14 @@ document.getElementById('shuffleBtn').addEventListener('click', () => {
     wf.appendChild(bar);
   }
 
-  // Dismiss after 2.8s
+  // Play intro audio — Pontypool quote
+  const introAudio = document.getElementById('introAudio');
+  introAudio.src = 'intro.mp3';
+  introAudio.volume = 0.8;
+  const playPromise = introAudio.play();
+  if (playPromise) playPromise.catch(() => {}); // autoplay may be blocked
+
+  // Dismiss after audio length (~2.8s)
   setTimeout(() => {
     const intro = document.getElementById('introScreen');
     intro.classList.add('fade-out');
