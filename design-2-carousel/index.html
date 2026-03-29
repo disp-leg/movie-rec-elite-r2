@@ -12,21 +12,27 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root {
-  --void: #f2f0ed;
-  --surface: #ffffff;
-  --surface-2: #f7f6f4;
-  --surface-3: #eceae6;
-  --text: #1a1a1a;
-  --text-dim: #5c5c5c;
-  --text-muted: #9a9a9a;
-  --accent: #8b6914;
-  --accent-dim: rgba(139,105,20,0.08);
-  --danger-soft: rgba(200,50,50,0.05);
-  --danger-border: rgba(200,50,50,0.18);
-  --success-soft: rgba(40,160,80,0.05);
-  --success-border: rgba(40,160,80,0.18);
-  --radius: 14px;
-  --radius-lg: 18px;
+  --void: #e8ecf0;
+  --surface: rgba(255,255,255,0.6);
+  --surface-2: rgba(255,255,255,0.4);
+  --surface-3: rgba(255,255,255,0.25);
+  --text: #1a1d21;
+  --text-dim: #4a5260;
+  --text-muted: #7a8494;
+  --accent: #5a6a7a;
+  --accent-bright: #4a5e72;
+  --accent-dim: rgba(90,106,122,0.1);
+  --chrome: #b0b8c0;
+  --chrome-dark: #6a7a8a;
+  --danger-soft: rgba(200,60,60,0.06);
+  --danger-border: rgba(200,60,60,0.2);
+  --success-soft: rgba(50,160,90,0.06);
+  --success-border: rgba(50,160,90,0.2);
+  --glass: rgba(255,255,255,0.55);
+  --glass-border: rgba(255,255,255,0.65);
+  --glass-blur: blur(16px) saturate(1.6);
+  --radius: 16px;
+  --radius-lg: 20px;
   --radius-pill: 100px;
   --ease: cubic-bezier(0.25, 1, 0.5, 1);
   --ease-dramatic: cubic-bezier(0.16, 1, 0.3, 1);
@@ -40,6 +46,11 @@
 }
 body {
   background: var(--void);
+  background-image:
+    radial-gradient(ellipse at 20% 20%, rgba(140,170,210,0.18) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 70%, rgba(120,160,200,0.14) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 100%, rgba(180,200,220,0.12) 0%, transparent 40%),
+    linear-gradient(180deg, #edf1f5 0%, #e4e8ee 40%, #dde2e9 100%);
   color: var(--text);
   font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
   overflow: hidden;
@@ -53,7 +64,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Three.js canvas — removed per revision, clean bg only */
+/* Unused legacy elements */
 #scene-canvas { display: none; }
 .grain { display: none; }
 
@@ -67,27 +78,108 @@ body {
   flex-direction: column;
 }
 
-/* Header */
-.header {
-  padding: 20px 24px 0;
+/* Top bar — glass panel */
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
   flex-shrink: 0;
   position: relative;
   z-index: 10;
+  background: var(--glass);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid var(--glass-border);
 }
-.header h1 {
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: -0.3px;
-  color: var(--text);
+.top-bar-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.top-bar-brand h1 {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 2.5px;
+  color: var(--chrome-dark);
   line-height: 1;
-}
-.header .sub {
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--text-muted);
-  margin-top: 5px;
-  letter-spacing: 0.4px;
   text-transform: uppercase;
+}
+.top-bar-brand .sub {
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.3px;
+}
+.top-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.top-icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--glass-border);
+  background: var(--surface-2);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--chrome-dark);
+  transition: all 200ms var(--ease);
+  padding: 0;
+  font-family: inherit;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.6);
+}
+.top-icon-btn:hover {
+  background: var(--glass);
+  color: var(--accent-bright);
+}
+.top-icon-btn svg { width: 16px; height: 16px; }
+
+/* Bottom tab bar — glass panel */
+.tab-bar {
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+  background: var(--glass);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-top: 1px solid var(--glass-border);
+  padding: 6px 8px calc(env(safe-area-inset-bottom, 8px) + 6px);
+  gap: 4px;
+}
+.tab-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 4px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: all 200ms var(--ease);
+}
+.tab-btn svg { width: 20px; height: 20px; flex-shrink: 0; }
+.tab-btn.active {
+  background: var(--accent-dim);
+  color: var(--accent-bright);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.4);
+}
+.tab-btn:not(.active):hover {
+  color: var(--text-dim);
 }
 
 /* Category pills */
@@ -136,12 +228,12 @@ body {
     inset 0 -0.5px 0 rgba(0,0,0,0.04);
 }
 .cat-pill.active {
-  background: rgba(139,105,20,0.1);
-  color: var(--accent);
-  border-color: rgba(201,168,124,0.25);
+  background: rgba(90,106,122,0.12);
+  color: var(--accent-bright);
+  border-color: rgba(90,106,122,0.25);
   box-shadow:
-    0 1px 3px rgba(139,105,20,0.1),
-    0 4px 12px rgba(139,105,20,0.06),
+    0 1px 3px rgba(90,106,122,0.1),
+    0 4px 12px rgba(90,106,122,0.06),
     inset 0 1px 0 rgba(255,255,255,0.5),
     inset 0 -0.5px 0 rgba(0,0,0,0.04);
 }
@@ -404,9 +496,9 @@ body {
   gap: 3px;
   padding: 2px 7px;
   border-radius: var(--radius-pill);
-  background: rgba(139,105,20,0.08);
+  background: rgba(90,106,122,0.08);
   font-size: 10px;
-  color: #8b6914;
+  color: var(--accent-bright);
   font-weight: 600;
   box-shadow: inset 0 1px 2px rgba(0,0,0,0.06), 0 1px 0 rgba(255,255,255,0.5);
 }
@@ -479,8 +571,8 @@ body {
 }
 .stream-link:hover {
   background: rgba(255,255,255,0.5);
-  color: #8b6914;
-  border-color: rgba(201,168,124,0.25);
+  color: var(--accent-bright);
+  border-color: rgba(120,140,160,0.25);
 }
 .stream-link svg { width: 12px; height: 12px; flex-shrink: 0; }
 
@@ -519,12 +611,12 @@ body {
     inset 0 -0.5px 0 rgba(0,0,0,0.04);
 }
 .act-btn:hover, .act-btn.on {
-  background: rgba(139,105,20,0.1);
-  color: #8b6914;
-  border-color: rgba(201,168,124,0.3);
+  background: rgba(90,106,122,0.1);
+  color: var(--accent-bright);
+  border-color: rgba(120,140,160,0.3);
   box-shadow:
-    0 2px 6px rgba(139,105,20,0.1),
-    0 4px 12px rgba(139,105,20,0.06),
+    0 2px 6px rgba(90,106,122,0.1),
+    0 4px 12px rgba(90,106,122,0.06),
     inset 0 1px 0 rgba(255,255,255,0.5),
     inset 0 -0.5px 0 rgba(0,0,0,0.04);
   transform: scale(1.06);
@@ -566,17 +658,17 @@ body {
   filter: drop-shadow(0 1px 0 rgba(255,255,255,0.4));
 }
 .star-btn.on {
-  background: rgba(139,105,20,0.08);
-  border-color: rgba(201,168,124,0.25);
+  background: rgba(90,106,122,0.08);
+  border-color: rgba(120,140,160,0.25);
 }
-.star-btn.on svg { color: #8b6914; }
+.star-btn.on svg { color: var(--accent-bright); }
 
-/* Bottom bar */
-.bottom-bar {
+/* Carousel controls — floating above tab bar */
+.carousel-controls {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 24px 28px;
+  padding: 8px 20px;
   flex-shrink: 0;
   position: relative;
   z-index: 10;
@@ -585,19 +677,20 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 9px 16px;
+  padding: 8px 14px;
   border-radius: var(--radius-pill);
   font-family: inherit;
-  font-size: 11px;
-  font-weight: 500;
-  background: rgba(255,255,255,0.5);
-  color: var(--text-dim);
-  border: 1px solid rgba(255,255,255,0.6);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  background: var(--glass);
+  color: var(--chrome-dark);
+  border: 1px solid var(--glass-border);
   cursor: pointer;
   transition: all 250ms var(--ease);
-  min-height: 44px;
-  backdrop-filter: blur(12px) saturate(1.4);
-  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  min-height: 36px;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   box-shadow:
     0 1px 3px rgba(0,0,0,0.06),
     0 4px 12px rgba(0,0,0,0.04),
@@ -606,22 +699,17 @@ body {
 }
 .shuffle-pill:hover {
   background: rgba(255,255,255,0.7);
-  color: var(--accent);
-  box-shadow:
-    0 2px 6px rgba(0,0,0,0.08),
-    0 6px 16px rgba(0,0,0,0.05),
-    inset 0 1px 0 rgba(255,255,255,0.8),
-    inset 0 -0.5px 0 rgba(0,0,0,0.04);
+  color: var(--accent-bright);
 }
-.shuffle-pill svg { width: 14px; height: 14px; }
+.shuffle-pill svg { width: 13px; height: 13px; }
 .counter-txt {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--chrome-dark);
   letter-spacing: 0.5px;
 }
 .hint-txt {
-  font-size: 9px;
+  font-size: 8px;
   color: var(--text-muted);
   opacity: 0.5;
   letter-spacing: 0.5px;
@@ -698,15 +786,32 @@ body {
 <div class="grain"></div>
 
 <div class="app">
-  <div class="header">
-    <h1>UNCUT</h1>
-    <div class="sub">Deep cuts &middot; The Divide universe</div>
+  <!-- Top bar -->
+  <div class="top-bar">
+    <div class="top-bar-brand">
+      <h1>UNCUT</h1>
+      <span class="sub">The Divide</span>
+    </div>
+    <div class="top-bar-actions">
+      <button class="top-icon-btn" aria-label="Profile">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </button>
+      <button class="top-icon-btn" aria-label="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
   </div>
+
+  <!-- Genre filter chips -->
   <div class="cat-nav" id="catNav"></div>
+
+  <!-- Carousel -->
   <div class="carousel-area" id="carouselArea">
     <div class="carousel" id="carousel"></div>
   </div>
-  <div class="bottom-bar">
+
+  <!-- Carousel controls -->
+  <div class="carousel-controls">
     <button class="shuffle-pill" id="shuffleBtn" aria-label="Shuffle movies">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
       Shuffle
@@ -714,6 +819,26 @@ body {
     <span class="hint-txt">swipe up / down</span>
     <span class="counter-txt" id="counter"></span>
   </div>
+
+  <!-- Bottom tab bar -->
+  <nav class="tab-bar" id="tabBar">
+    <button class="tab-btn active" data-tab="carousel" aria-label="Carousel">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      Carousel
+    </button>
+    <button class="tab-btn" data-tab="watchlist" aria-label="Watchlist">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+      Watchlist
+    </button>
+    <button class="tab-btn" data-tab="history" aria-label="History">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      History
+    </button>
+    <button class="tab-btn" data-tab="dnf" aria-label="DNF">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+      DNF
+    </button>
+  </nav>
 </div>
 
 <script>
@@ -1179,6 +1304,17 @@ document.getElementById('shuffleBtn').addEventListener('click', () => {
     setTimeout(() => { intro.remove(); }, 800);
   }, 2800);
 })();
+
+// ============================================
+// TAB BAR
+// ============================================
+document.getElementById('tabBar').addEventListener('click', e => {
+  const btn = e.target.closest('.tab-btn');
+  if (!btn) return;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  // Future: switch views based on btn.dataset.tab
+});
 
 // ============================================
 // INIT
