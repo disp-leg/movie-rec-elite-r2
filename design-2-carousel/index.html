@@ -716,6 +716,57 @@ body {
   text-transform: uppercase;
 }
 
+/* Gesture feedback toast */
+.gesture-toast {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.8);
+  z-index: 500;
+  padding: 12px 24px;
+  border-radius: var(--radius);
+  background: rgba(0,0,0,0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: none;
+}
+.gesture-toast.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+  transition: opacity 0.15s ease, transform 0.15s var(--ease-spring);
+}
+.gesture-toast.hide {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.9);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.gesture-toast .toast-icon {
+  font-size: 22px;
+  display: block;
+  margin-bottom: 4px;
+}
+
+/* Swipe directional tint overlays on tile */
+.swipe-tint {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius);
+  z-index: 50;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.swipe-tint.watched { background: rgba(50,160,90,0.2); }
+.swipe-tint.dnf { background: rgba(200,60,60,0.2); }
+.swipe-tint.saved { background: rgba(90,106,122,0.2); }
+
 /* Intro screen */
 .intro-screen {
   position: fixed;
@@ -801,6 +852,9 @@ body {
       </button>
     </div>
   </div>
+
+  <!-- Gesture feedback toast -->
+  <div class="gesture-toast" id="gestureToast"></div>
 
   <!-- Genre filter chips -->
   <div class="cat-nav" id="catNav"></div>
@@ -893,6 +947,7 @@ function streamUrl(p,t){
 // ============================================
 const tiers=[{key:"direct",label:"Direct Matches"},{key:"claustrophobic",label:"Claustrophobic"},{key:"survival",label:"Survival"},{key:"adjacent",label:"Adjacent"}];
 let curTier="direct", filtered=[], idx=0, anim=false, ratings={}, actions={};
+const watchlistArr=[], historyArr=[], dnfArr=[];
 
 // Three.js removed per revision — clean light background only
 
@@ -1193,90 +1248,295 @@ function spinNav(dir, count) {
 }
 
 // ============================================
-// GESTURE HANDLING — debounced, no jank
+// SOUND ENGINE — Web Audio API projector sounds
 // ============================================
-let tsy = 0, tst = 0, gestLock = false;
-const area = document.getElementById('carouselArea');
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx;
+function ensureAudio() { if (!audioCtx) audioCtx = new AudioCtx(); return audioCtx; }
 
-function handleSwipe(dy, dt) {
-  if (anim || gestLock || !filtered.length) return;
-  if (Math.abs(dy) < 40) return; // threshold
-  gestLock = true;
-  const dir = dy > 0 ? 1 : -1;
-  const v = Math.abs(dy) / Math.max(dt, 1);
+function playSound(type) {
+  try {
+    const ctx = ensureAudio();
+    const now = ctx.currentTime;
+    const gain = ctx.createGain();
+    gain.connect(ctx.destination);
 
-  if (v > 1.5) {
-    const count = Math.min(Math.floor(v * 1.2), filtered.length - 1);
-    spinNav(dir, count);
-  } else {
-    nav(dir);
-  }
+    if (type === 'click') {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(800, now);
+      osc.frequency.exponentialRampToValueAtTime(200, now + 0.04);
+      gain.gain.setValueAtTime(0.08, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+      osc.connect(gain); osc.start(now); osc.stop(now + 0.06);
+    } else if (type === 'ratchet') {
+      for (let i = 0; i < 2; i++) {
+        const t = now + i * 0.035;
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(600 - i * 200, t);
+        osc.frequency.exponentialRampToValueAtTime(100, t + 0.03);
+        g.gain.setValueAtTime(0.06, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+        osc.connect(g); g.connect(ctx.destination);
+        osc.start(t); osc.stop(t + 0.05);
+      }
+    } else if (type === 'flip') {
+      const noise = ctx.createBufferSource();
+      const buf = ctx.createBuffer(1, ctx.sampleRate * 0.08, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * 0.3;
+      noise.buffer = buf;
+      const filt = ctx.createBiquadFilter();
+      filt.type = 'bandpass'; filt.frequency.value = 2000; filt.Q.value = 1;
+      gain.gain.setValueAtTime(0.07, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+      noise.connect(filt); filt.connect(gain);
+      noise.start(now); noise.stop(now + 0.08);
+    } else if (type === 'slot') {
+      const osc = ctx.createOscillator();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(400, now);
+      osc.frequency.exponentialRampToValueAtTime(120, now + 0.025);
+      gain.gain.setValueAtTime(0.04, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
+      osc.connect(gain); osc.start(now); osc.stop(now + 0.035);
+    } else if (type === 'action') {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(500, now);
+      osc.frequency.setValueAtTime(700, now + 0.05);
+      gain.gain.setValueAtTime(0.06, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+      osc.connect(gain); osc.start(now); osc.stop(now + 0.1);
+    }
+  } catch(e) {}
 }
 
-// Touch
+// ============================================
+// GESTURE TOAST
+// ============================================
+function showToast(icon, text) {
+  const el = document.getElementById('gestureToast');
+  el.textContent = '';
+  const sp = document.createElement('span');
+  sp.className = 'toast-icon'; sp.textContent = icon;
+  el.appendChild(sp);
+  el.appendChild(document.createTextNode(text));
+  el.className = 'gesture-toast show';
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => { el.className = 'gesture-toast hide'; }, 900);
+}
+
+// ============================================
+// SWIPE ACTIONS — watched, DNF, save
+// ============================================
+function swipeAction(action) {
+  if (anim || !filtered.length) return;
+  const m = filtered[idx];
+  if (!m) return;
+  anim = true;
+
+  const tile = document.querySelector('.tile');
+  if (!tile) { anim = false; return; }
+
+  let xDir = 0, icon = '', label = '', list = null;
+  if (action === 'watched') {
+    xDir = 1; icon = '\u2713'; label = 'Watched'; list = historyArr;
+  } else if (action === 'dnf') {
+    xDir = -1; icon = '\u2715'; label = 'DNF'; list = dnfArr;
+  } else if (action === 'save') {
+    xDir = 0; icon = '\u2605'; label = 'Saved'; list = watchlistArr;
+  }
+  playSound('action');
+  if (list && !list.find(x => x.id === m.id)) list.push(m);
+  showToast(icon, label);
+
+  gsap.to(tile, {
+    x: xDir * 400,
+    y: action === 'save' ? -60 : 0,
+    opacity: 0,
+    scale: action === 'save' ? 1.05 : 0.9,
+    rotation: xDir * 12,
+    duration: 0.35,
+    ease: 'power2.in',
+    onComplete: () => {
+      tile.remove();
+      if (action === 'dnf') {
+        filtered = filtered.filter(f => f.id !== m.id);
+        if (idx >= filtered.length) idx = 0;
+      } else {
+        idx = (idx + 1) % filtered.length;
+      }
+      if (filtered.length) {
+        const nt = renderTile(false);
+        if (nt) {
+          gsap.fromTo(nt,
+            { opacity: 0, y: 30, scale: 0.95 },
+            { opacity: 1, y: 0, scale: 1, duration: 0.35, ease: 'power2.out' }
+          );
+        }
+      }
+      document.getElementById('counter').textContent = filtered.length ? (idx+1)+' / '+filtered.length : '0';
+      anim = false; gestLock = false;
+    }
+  });
+}
+
+// ============================================
+// SLOT MACHINE SHUFFLE
+// ============================================
+function slotShuffle() {
+  if (anim || !filtered.length || filtered.length < 2) return;
+  anim = true;
+  const totalSpins = 6 + Math.floor(Math.random() * 4);
+  let i = 0;
+
+  function spin() {
+    if (i >= totalSpins) {
+      anim = false; gestLock = false;
+      playSound('ratchet');
+      return;
+    }
+    const oldTile = document.querySelector('.tile');
+    const progress = i / totalSpins;
+    const dur = 0.06 + progress * progress * 0.22;
+
+    idx = (idx + 1) % filtered.length;
+    const newTile = renderTile(true);
+    playSound('slot');
+
+    if (oldTile && newTile && oldTile !== newTile) {
+      gsap.set(newTile, { y: 80, opacity: 0 });
+      gsap.to(oldTile, {
+        y: -80, opacity: 0,
+        duration: dur * 0.6,
+        ease: 'power1.in',
+      });
+      gsap.to(newTile, {
+        y: 0, opacity: 1,
+        duration: dur,
+        ease: i >= totalSpins - 1 ? 'back.out(1.2)' : 'power1.out',
+        onComplete: () => {
+          oldTile.remove();
+          gsap.set(newTile, { y: 0, z: 0, rotateX: 3, opacity: 1 });
+          i++; spin();
+        }
+      });
+    } else { i++; spin(); }
+  }
+  spin();
+}
+
+// ============================================
+// GESTURE HANDLING — multi-directional
+// ============================================
+let tsx = 0, tsy = 0, tst = 0, gestLock = false, longPressTimer = null;
+const area = document.getElementById('carouselArea');
+
 area.addEventListener('touchstart', e => {
   if (anim) return;
+  tsx = e.touches[0].clientX;
   tsy = e.touches[0].clientY;
   tst = Date.now();
+  longPressTimer = setTimeout(() => {
+    longPressTimer = null;
+    swipeAction('save');
+  }, 500);
+}, {passive: true});
+
+area.addEventListener('touchmove', e => {
+  if (longPressTimer) {
+    const dx = Math.abs(e.touches[0].clientX - tsx);
+    const dy = Math.abs(e.touches[0].clientY - tsy);
+    if (dx > 10 || dy > 10) { clearTimeout(longPressTimer); longPressTimer = null; }
+  }
 }, {passive: true});
 
 area.addEventListener('touchend', e => {
+  if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+  if (anim || gestLock) return;
+  const dx = e.changedTouches[0].clientX - tsx;
   const dy = tsy - e.changedTouches[0].clientY;
   const dt = Date.now() - tst;
-  handleSwipe(dy, dt);
+  const absDx = Math.abs(dx), absDy = Math.abs(dy);
+
+  if (absDx < 15 && absDy < 15 && dt < 300) return; // tap — handled by click
+
+  if (absDx > absDy && absDx > 50) {
+    gestLock = true;
+    playSound('ratchet');
+    if (dx > 0) swipeAction('watched');
+    else swipeAction('dnf');
+  } else if (absDy > 40) {
+    gestLock = true;
+    playSound('ratchet');
+    nav(dy > 0 ? 1 : -1);
+  }
 }, {passive: true});
 
-// Mouse drag
-let mdn = false, msy = 0, mst = 0;
+// Mouse drag (desktop)
+let mdn = false, msx = 0, msy = 0, mst = 0;
 area.addEventListener('mousedown', e => {
   if (anim) return;
-  mdn = true; msy = e.clientY; mst = Date.now();
+  mdn = true; msx = e.clientX; msy = e.clientY; mst = Date.now();
 });
 window.addEventListener('mouseup', e => {
   if (!mdn) return; mdn = false;
-  handleSwipe(msy - e.clientY, Date.now() - mst);
+  const dx = e.clientX - msx;
+  const dy = msy - e.clientY;
+  const absDx = Math.abs(dx), absDy = Math.abs(dy);
+  if (absDx > absDy && absDx > 50) {
+    gestLock = true;
+    if (dx > 0) swipeAction('watched');
+    else swipeAction('dnf');
+  } else if (absDy > 40) {
+    gestLock = true;
+    playSound('ratchet');
+    nav(dy > 0 ? 1 : -1);
+  }
 });
 
-// Scroll wheel — debounced to prevent glitch/rapid-fire
+// Scroll wheel
 let wheelAccum = 0, wheelTimer = null;
 area.addEventListener('wheel', e => {
   e.preventDefault();
   if (anim) return;
-
   wheelAccum += e.deltaY;
   clearTimeout(wheelTimer);
   wheelTimer = setTimeout(() => {
     if (Math.abs(wheelAccum) > 30) {
-      const dir = wheelAccum > 0 ? 1 : -1;
-      nav(dir);
+      playSound('ratchet');
+      nav(wheelAccum > 0 ? 1 : -1);
     }
     wheelAccum = 0;
   }, 80);
 }, {passive: false});
 
-// Also prevent scroll glitch on document level
 document.addEventListener('wheel', e => {
-  if (e.target.closest('.tile-back')) return; // allow back-face scroll
+  if (e.target.closest('.tile-back')) return;
   e.preventDefault();
 }, {passive: false});
 
 // Keyboard
 document.addEventListener('keydown', e => {
-  if (e.key === 'ArrowUp') nav(-1);
-  else if (e.key === 'ArrowDown') nav(1);
+  if (e.key === 'ArrowUp') { playSound('ratchet'); nav(-1); }
+  else if (e.key === 'ArrowDown') { playSound('ratchet'); nav(1); }
+  else if (e.key === 'ArrowRight') swipeAction('watched');
+  else if (e.key === 'ArrowLeft') swipeAction('dnf');
   else if (e.key === ' ') {
     e.preventDefault();
+    playSound('flip');
     const t = document.querySelector('.tile');
     if (t) t.click();
   }
 });
 
-// nav() and spinNav() are defined above in the orbital section
-
-// Shuffle — fewer spins, snappier
+// Shuffle button — slot machine style
 document.getElementById('shuffleBtn').addEventListener('click', () => {
-  if (anim || !filtered.length) return;
-  spinNav(1, 2 + Math.floor(Math.random() * 3));
+  playSound('click');
+  slotShuffle();
 });
 
 // ============================================
