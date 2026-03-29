@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Movie Rec — Vertical Carousel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root {
+  --void: #050508;
+  --surface: #0f0f14;
+  --surface-2: #18181f;
+  --surface-3: #222230;
+  --text: #e8e6e3;
+  --text-dim: #6e6d7a;
+  --text-muted: #44434f;
+  --accent: #c9a87c;
+  --accent-dim: rgba(201,168,124,0.12);
+  --danger-soft: rgba(255,82,82,0.08);
+  --danger-border: rgba(255,82,82,0.2);
+  --success-soft: rgba(100,220,140,0.08);
+  --success-border: rgba(100,220,140,0.2);
+  --radius: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 100px;
+  --ease: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-dramatic: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+body {
+  background: var(--void);
+  color: var(--text);
+  font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+  overflow: hidden;
+  height: 100vh;
+  height: 100dvh;
+  width: 100vw;
+  max-width: 430px;
+  margin: 0 auto;
+  position: relative;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Three.js canvas */
+#scene-canvas {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Noise grain overlay */
+.grain {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+}
+
+/* App shell */
+.app {
+  position: relative;
+  z-index: 1;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.header {
+  padding: 20px 24px 0;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+}
+.header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  color: var(--text);
+  line-height: 1;
+}
+.header .sub {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-top: 5px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+/* Category pills */
+.cat-nav {
+  display: flex;
+  gap: 6px;
+  padding: 14px 24px 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+}
+.cat-nav::-webkit-scrollbar { display: none; }
+.cat-pill {
+  white-space: nowrap;
+  padding: 7px 16px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid rgba(255,255,255,0.06);
+  cursor: pointer;
+  transition: all 250ms var(--ease);
+  flex-shrink: 0;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  font-family: inherit;
+}
+.cat-pill.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: rgba(201,168,124,0.2);
+}
+
+/* Carousel area */
+.carousel-area {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 1200px;
+}
+
+/* Carousel wrapper — holds all visible tiles */
+.carousel {
+  position: relative;
+  width: 85%;
+  max-width: 340px;
+  height: 100%;
+  transform-style: preserve-3d;
+}
+
+/* Individual tile in the carousel */
+.tile {
+  position: absolute;
+  width: 100%;
+  aspect-ratio: 2/3;
+  left: 0;
+  top: 50%;
+  transform-style: preserve-3d;
+  cursor: pointer;
+  will-change: transform, opacity;
+}
+.tile.flipped .tile-inner {
+  transform: rotateY(180deg);
+}
+.tile-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 500ms var(--ease-dramatic);
+}
+
+/* Front face */
+.tile-front {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 4px 16px rgba(0,0,0,0.3);
+}
+.tile-front img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  /* PURE poster art — no filters, no overlays, no opacity changes */
+}
+
+/* Title block at bottom of front */
+.tile-title-block {
+  position: absolute;
+  bottom: 0;
+  left: 0; right: 0;
+  padding: 40px 16px 14px;
+  background: linear-gradient(to top, rgba(5,5,8,0.85) 0%, rgba(5,5,8,0.4) 60%, transparent 100%);
+}
+.tile-title-block h2 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: -0.2px;
+  line-height: 1.3;
+}
+.tile-title-block .tile-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.tile-title-block .tile-year {
+  font-size: 11px;
+  font-weight: 400;
+  color: rgba(255,255,255,0.5);
+}
+.tile-stream-icons {
+  display: flex;
+  gap: 4px;
+}
+.tile-stream-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  opacity: 0.6;
+}
+
+/* Back face — MATTE finish, NOT a reversed poster */
+.tile-back {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  transform: rotateY(180deg);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 22px 18px;
+  -webkit-overflow-scrolling: touch;
+  /* Matte texture */
+  background-image: linear-gradient(180deg, var(--surface-2) 0%, var(--surface) 100%);
+}
+
+.back-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--text);
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+.back-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lb-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-dim);
+  font-size: 10px;
+  color: var(--accent);
+  font-weight: 600;
+}
+.back-synopsis {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-dim);
+  margin-bottom: 14px;
+}
+
+/* Quotes */
+.quote-block { margin-bottom: 14px; }
+.quote {
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 11px;
+  line-height: 1.6;
+  font-style: italic;
+  margin-bottom: 6px;
+  color: var(--text-dim);
+}
+.q1 { background: var(--danger-soft); border-left: 2px solid var(--danger-border); }
+.q5 { background: var(--success-soft); border-left: 2px solid var(--success-border); }
+
+/* Section labels */
+.section-lbl {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+/* Stream links */
+.stream-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.stream-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--surface-2);
+  color: var(--text-dim);
+  text-decoration: none;
+  border: 1px solid rgba(255,255,255,0.04);
+  transition: all 200ms var(--ease);
+  min-height: 32px;
+  font-family: inherit;
+}
+.stream-link:hover {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: rgba(201,168,124,0.15);
+}
+.stream-link svg { width: 12px; height: 12px; flex-shrink: 0; }
+
+/* Action buttons */
+.actions-row {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.act-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.06);
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 200ms var(--ease);
+  color: var(--text-dim);
+  font-family: inherit;
+  padding: 0;
+}
+.act-btn:hover, .act-btn.on {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: rgba(201,168,124,0.2);
+  transform: scale(1.06);
+}
+.act-btn svg { width: 16px; height: 16px; }
+
+/* Stars */
+.star-row {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+.star-btn {
+  width: 32px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+}
+.star-btn svg { width: 20px; height: 20px; color: var(--surface-3); transition: color 150ms ease; }
+.star-btn.on svg { color: var(--accent); }
+
+/* Bottom bar */
+.bottom-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 24px 28px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+}
+.shuffle-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border-radius: var(--radius-pill);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--surface-2);
+  color: var(--text-dim);
+  border: 1px solid rgba(255,255,255,0.06);
+  cursor: pointer;
+  transition: all 250ms var(--ease);
+  min-height: 44px;
+}
+.shuffle-pill:hover {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: rgba(201,168,124,0.15);
+}
+.shuffle-pill svg { width: 14px; height: 14px; }
+.counter-txt {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+.hint-txt {
+  font-size: 9px;
+  color: var(--text-muted);
+  opacity: 0.5;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+</style>
+</head>
+<body>
+<canvas id="scene-canvas"></canvas>
+<div class="grain"></div>
+
+<div class="app">
+  <div class="header">
+    <h1>Movie Rec</h1>
+    <div class="sub">Deep cuts &middot; The Divide universe</div>
+  </div>
+  <div class="cat-nav" id="catNav"></div>
+  <div class="carousel-area" id="carouselArea">
+    <div class="carousel" id="carousel"></div>
+  </div>
+  <div class="bottom-bar">
+    <button class="shuffle-pill" id="shuffleBtn" aria-label="Shuffle movies">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+      Shuffle
+    </button>
+    <span class="hint-txt">swipe up / down</span>
+    <span class="counter-txt" id="counter"></span>
+  </div>
+</div>
+
+<script>
+// ============================================
+// DATA
+// ============================================
+const movies = [
+{id:1,title:"Right at Your Door",year:2006,director:"Chris Gorak",tier:"direct",poster:"https://image.tmdb.org/t/p/w500/sBkCtdpkWRiisQ3vzyNOZ72biCB.jpg",synopsis:"Dirty bomb hits LA; husband seals himself inside the house while wife is outside. Claustrophobic domestic apocalypse tension.",streaming:["Tubi","Pluto TV"],rating:3.1,q1:"\u2605 \"A marriage stress-test disguised as a low-budget LA panic nightmare, and somehow the marriage loses.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"Sealed my husband outside during a gas leak once. Didn\u2019t realise this movie was a how-to guide.\""},
+{id:2,title:"Hidden",year:2015,director:"Matt Duffer, Ross Duffer",tier:"direct",poster:"https://image.tmdb.org/t/p/w500/mPuaHaczkoJDzlYD9GyXiDjMXig.jpg",synopsis:"Family hiding in a bunker after an outbreak. Pre-Stranger Things Duffer Brothers. Claustrophobic survival with a twist ending.",streaming:["Netflix","Amazon Prime"],rating:3.1,q1:"\u2605 \"The only way this movie should be watched is split into 10 parts with subway surfers covering half the screen.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"The twist absolutely EATS!!!! i was having a fine time for most of it but when the reveal happens OOHHHHH SUDDENLY ITS ALL WORTH IT\""},
+{id:3,title:"Carriers",year:2009,director:"Alex Pastor, David Pastor",tier:"direct",poster:"https://image.tmdb.org/t/p/w500/jxjnjHtHXgvjdhkwpelE9ZwVMg6.jpg",synopsis:"Four survivors navigate a pandemic wasteland with strict rules to avoid infection. Moral decay under survival pressure.",streaming:["Amazon Prime","Tubi"],rating:2.8,q1:"\u2605 \"Could have been called \u2018How To Be An Asshole at The End Of The World\u2019 and saved everyone 84 minutes of their lives.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"I hate this fucking movie and every god damn thing about it but I\u2019ve watched it four times so make of that what you will.\""},
+{id:4,title:"It Comes at Night",year:2017,director:"Trey Edward Shults",tier:"direct",poster:"https://image.tmdb.org/t/p/w500/rNKJpFMlOZn5zkzBPZxEJrQn5Km.jpg",synopsis:"Family boarded up during an unspecified plague. Another family arrives. Trust erodes into paranoia and violence.",streaming:["Netflix","Amazon Prime"],rating:3.1,q1:"\u2605 \"I can\u2019t tell what was worse \u2014 never finding out what comes at night, or the aspect ratio.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"Anyone else losing their entire fucking mind\""},
+{id:5,title:"Await Further Instructions",year:2018,director:"Johnny Kevorkian",tier:"direct",poster:"https://image.tmdb.org/t/p/w500/afvi5tVi5S3Ux9faZaI32SmPRkj.jpg",synopsis:"Family trapped on Christmas Day by a mysterious barricade. TV gives increasingly sinister instructions.",streaming:["Netflix","Shudder"],rating:2.5,q1:"\u2605 \"The writer of this film should be sent to prison. Not metaphorically. Actual prison.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"A Christmas movie about a racist family being eaten by their television. I will be revisiting this every December.\""},
+{id:6,title:"Coherence",year:2013,director:"James Ward Byrkit",tier:"claustrophobic",poster:"https://image.tmdb.org/t/p/w500/ezUtb9m5DeLwL2gxi4gktzNCvQv.jpg",synopsis:"Dinner party goes wrong when a comet passes overhead. Reality fractures. Shot in a single house with improvised dialogue.",streaming:["Amazon Prime","Tubi"],rating:3.7,q1:"\u2605 \"The Blair Witch Project for insufferable yuppies who own too many wine glasses.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"If there are a million different realities, I have slept with your wife in every single one of them.\""},
+{id:7,title:"Pontypool",year:2008,director:"Bruce McDonald",tier:"claustrophobic",poster:"https://image.tmdb.org/t/p/w500/uh4n9FSYYaeOWchP8gBPNtg7kD7.jpg",synopsis:"Radio DJ trapped in his station as a virus spreads through the English language. The horror is in what you hear.",streaming:["Shudder","Tubi"],rating:3.3,q1:"\u2605 \"Hilarious that a film about radio DJs can\u2019t even get the vocals on the right frequency. Truly committed to the bit.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"What if Night of the Living Dead was a locked-in War of the Worlds radio play starring Kawartha Lakes\u2019 Howard Stern? Perfection.\""},
+{id:8,title:"The Platform",year:2019,director:"Galder Gaztelu-Urrutia",tier:"claustrophobic",poster:"https://image.tmdb.org/t/p/w500/iXvQnzy6JCAx1PiQEKXuTY04ZHl.jpg",synopsis:"Vertical prison where food descends level by level. Upper floors feast; lower floors starve. Brutal social allegory.",streaming:["Netflix"],rating:3.4,q1:"\u2605 \"I was with it and then it ended and now I\u2019m mad. I wanted to throw up and I didn\u2019t even get an explanation. So dumb.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"This is the most fucked up Mukbang I\u2019ve ever seen and I genuinely cannot stop thinking about it.\""},
+{id:9,title:"Exam",year:2009,director:"Stuart Hazeldine",tier:"claustrophobic",poster:"https://image.tmdb.org/t/p/w500/i1J2zBCyOQJKsQipqJ0qXERC1Ma.jpg",synopsis:"Eight candidates in a single room for a final job interview. One question, 80 minutes, strict rules.",streaming:["Tubi","Amazon Prime"],rating:3.3,q1:"\u2605 \"Eight people locked in a room fail to ask a question for 90 minutes. Truly the most realistic job interview ever filmed.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"SAW for people who love riddles and there\u2019s no gore at all, which means it\u2019s somehow more disturbing than SAW.\""},
+{id:10,title:"The Bar",year:2017,director:"Alex de la Iglesia",tier:"claustrophobic",poster:"https://image.tmdb.org/t/p/w500/vYyALnKnzHLv4PoU2b447GYT8R9.jpg",synopsis:"Patrons trapped in a Madrid bar after a sniper kills anyone who exits. Paranoia mounts as they turn on each other.",streaming:["Netflix","Amazon Prime"],rating:3.0,q1:"\u2605 \"Starts as a clever absurdist siege thriller and ends as a loud, boring descent into a sewer. Literally.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"People trapped in a Madrid bar after a shooting. Devolved into full Lord of the Flies within 20 minutes. This is peak cinema.\""},
+{id:11,title:"Circle",year:2015,director:"Aaron Hann, Mario Miscione",tier:"survival",poster:"https://image.tmdb.org/t/p/w500/hbIL53MdZFJXsgxXaSOVuApWTs8.jpg",synopsis:"50 strangers in a circle. Every 2 minutes, one dies by group vote. Pure survival psychology.",streaming:["Netflix","Tubi"],rating:2.9,q1:"\u2605 \"50 people slowly eliminate each other with no explanation and I eliminated myself from the couch after 30 minutes.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"What a shitty prize. You get to live on an earth populated by the orphans, pregnant women, and other assholes humanity voted to keep.\""},
+{id:12,title:"Would You Rather",year:2012,director:"David Guy Levy",tier:"survival",poster:"https://image.tmdb.org/t/p/w500/tos5MpjaOsAFVGjjieQlZsHlbd.jpg",synopsis:"Desperate guests at a rich man\u2019s dinner party forced into increasingly brutal choices.",streaming:["Tubi","Amazon Prime"],rating:2.8,q1:"\u2605 \"The good thing about this film is it goes quickly. The bad thing is it exists.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"My favourite part was when she forgot she had been stabbed. Method acting in reverse.\""},
+{id:13,title:"Fermat\u2019s Room",year:2007,director:"Luis Piedrahita, Rodrigo Sope\u00f1a",tier:"survival",poster:"https://image.tmdb.org/t/p/w500/qQcYvPXxvk6bQDV9Zgd6cnDQmKZ.jpg",synopsis:"Four mathematicians locked in a room that shrinks unless they solve puzzles.",streaming:["Amazon Prime","Tubi"],rating:3.2,q1:"\u2605 \"WHAT HAPPENS ON THE GODDAMN BOAT?! This film\u2019s worst sin is attempting intelligence and landing at kindergarten.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"My guy was going to kill four people and himself over math. It\u2019s not that deep bro. And yet I respect him completely.\""},
+{id:14,title:"Level 16",year:2018,director:"Danishka Esterhazy",tier:"survival",poster:"https://image.tmdb.org/t/p/w500/glVIjhLmzmgtppLWb3lvnoPljGW.jpg",synopsis:"Girls in a mysterious boarding school discover the horrifying purpose of their captivity.",streaming:["Shudder","Tubi"],rating:3.0,q1:"\u2605 \"Timely and interminable. A Handmaid\u2019s Tale riff that forgot to include anything happening.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"A very clever little Black Mirror riff that made me feel genuinely unsafe in my own bedroom and I live alone.\""},
+{id:15,title:"The Incident",year:2014,director:"Isaac Ezban",tier:"survival",poster:"https://image.tmdb.org/t/p/w500/idb1ACZCQAsYJCFMfs9vgyBIbP1.jpg",synopsis:"Two groups trapped in infinite loops \u2014 one in a stairwell, one on a highway. Existential claustrophobia.",streaming:["Amazon Prime","Tubi"],rating:3.1,q1:"\u2605 \"What was that incident?! The incident was this movie being made and nobody warning me.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"A sci-fi horror masterclass in breaking your heart and stealing your sanity. The weight of infinity before your eyes. I am not okay.\""},
+{id:16,title:"Pandorum",year:2009,director:"Christian Alvart",tier:"adjacent",poster:"https://image.tmdb.org/t/p/w500/mNMfa6r3pl0EzFIKEkVcxyr6Rc7.jpg",synopsis:"Crew wakes on a spaceship with no memory. Something is hunting them in the dark.",streaming:["Amazon Prime","Tubi"],rating:3.2,q1:"\u2605 \"I\u2019ve never been more confused in my life and I once took an Ambien and watched Tenet.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"Basically two films in one and both of them slap. Criminally underseen. Dennis Quaid deserved a sequel and a raise.\""},
+{id:17,title:"The Void",year:2016,director:"Jeremy Gillespie, Steven Kostanski",tier:"adjacent",poster:"https://image.tmdb.org/t/p/w500/2WhZAPi3vomEQdzAPIYTvmvWaxI.jpg",synopsis:"People trapped in a hospital surrounded by cultists. Cosmic horror seeps in.",streaming:["Shudder","Tubi"],rating:3.0,q1:"\u2605 \"This warmed-over Lovecraft nonsense is exactly the dull fate this protagonist deserves, and somehow also me for watching it.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"Grim, forlorn dankness, extraterrestrial gods, cultists with knives, and XTREME Carpenter worship. This is everything. I am fed.\""},
+{id:18,title:"Breathing Room",year:2008,director:"John Suits, Gabriel Cowan",tier:"adjacent",poster:"https://image.tmdb.org/t/p/w500/aaz4rgsEjApkUz87OrFT6sNZDks.jpg",synopsis:"Strangers wake in a locked white room wearing explosive collars. Must figure out the rules or die.",streaming:["Tubi"],rating:2.4,q1:"\u2605 \"Found this in a 10 for $1 used DVD bin. Ten cents feels like maybe a bit much.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"A not-as-good version of Exam, which is a compliment, because Exam is incredible and this one still broke my brain on a Tuesday.\""},
+{id:19,title:"The Hole",year:2001,director:"Nick Hamm",tier:"adjacent",poster:"https://image.tmdb.org/t/p/w500/n5aMoI6AZLJzUoNbjMj0P60EYMJ.jpg",synopsis:"Four teens lock themselves in a WWII bunker for a party weekend. Things go wrong.",streaming:["Amazon Prime"],rating:2.9,q1:"\u2605 \"The DVD cover says \u2018super scary. brilliant.\u2019 which is obviously a lie written by someone who has never met either of those things.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"Thora Birch locked her friends in an underground bunker to steal a boy and it almost worked. Respect the commitment to the bit.\""},
+{id:20,title:"The Bunker",year:2024,director:"Adrian Langley",tier:"adjacent",poster:"https://image.tmdb.org/t/p/w500/jOA7chFPVzSyPp2DaRg8hqA1BHr.jpg",synopsis:"Survivors in a bunker after nuclear event. Resources dwindle, tensions rise, paranoia sets in.",streaming:["Tubi","Amazon Prime"],rating:2.6,q1:"\u2605 \"The shit I will sit through for Tobin Bell and Tony Todd. And this is where that journey ends.\"",q5:"\u2605\u2605\u2605\u2605\u2605 \"The whole film is one long Zoom call about a bioweapon and somehow that\u2019s exactly what I needed on a Friday night.\""}
+];
+
+// SVG icons — thin Phosphor-style lines
+const IC = {
+  heart:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>',
+  up:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>',
+  down:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg>',
+  eye:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
+  mark:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>',
+  star:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
+  starF:'<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="0.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
+  play:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>'
+};
+function svgEl(s){const p=new DOMParser();return p.parseFromString(s,'image/svg+xml').documentElement;}
+
+// Streaming
+const streamColors={Netflix:"#e50914","Amazon Prime":"#00a8e1",Shudder:"#a259ff",Tubi:"#fa382f","Pluto TV":"#00b3e3",Dopebox:"#64dc8c"};
+function streamUrl(p,t){
+  const e=encodeURIComponent(t),h=t.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/-+$/,'');
+  return{Netflix:`https://www.netflix.com/search?q=${e}`,"Amazon Prime":`https://www.amazon.com/s?k=${e}&i=instant-video`,Shudder:`https://www.shudder.com/search?q=${e}`,Tubi:`https://tubitv.com/search/${e}`,"Pluto TV":`https://pluto.tv/search/details/${e}`,Dopebox:`https://dopebox.to/search/${h}`}[p]||'#';
+}
+
+// ============================================
+// STATE
+// ============================================
+const tiers=[{key:"direct",label:"Direct Matches"},{key:"claustrophobic",label:"Claustrophobic"},{key:"survival",label:"Survival"},{key:"adjacent",label:"Adjacent"}];
+let curTier="direct", filtered=[], idx=0, anim=false, ratings={}, actions={};
+const VISIBLE=5; // tiles visible in carousel (center + 2 above + 2 below)
+
+// ============================================
+// THREE.JS — Cinematic void with volumetric light
+// ============================================
+const canvas=document.getElementById('scene-canvas');
+const ren=new THREE.WebGLRenderer({canvas,alpha:true,antialias:true});
+ren.setSize(window.innerWidth,window.innerHeight);
+ren.setPixelRatio(Math.min(window.devicePixelRatio,2));
+ren.shadowMap.enabled=true;
+ren.shadowMap.type=THREE.PCFSoftShadowMap;
+const sc=new THREE.Scene();
+const cam=new THREE.PerspectiveCamera(50,window.innerWidth/window.innerHeight,0.1,100);
+cam.position.z=20;
+
+// Subtle ambient
+sc.add(new THREE.AmbientLight(0x181820,0.6));
+
+// Warm spot from above — cinema projector feel
+const spot=new THREE.SpotLight(0xc9a87c,0.4,40,Math.PI*0.3,0.6);
+spot.position.set(0,12,10);
+spot.castShadow=true;
+sc.add(spot);
+
+// Cool fill from below
+const fill=new THREE.PointLight(0x2a3a5e,0.2,30);
+fill.position.set(0,-8,8);
+sc.add(fill);
+
+// Floating particles
+const pCount=200;
+const pGeo=new THREE.BufferGeometry();
+const pPos=new Float32Array(pCount*3);
+for(let i=0;i<pCount;i++){
+  pPos[i*3]=(Math.random()-0.5)*40;
+  pPos[i*3+1]=(Math.random()-0.5)*40;
+  pPos[i*3+2]=(Math.random()-0.5)*20-5;
+}
+pGeo.setAttribute('position',new THREE.BufferAttribute(pPos,3));
+const pMat=new THREE.PointsMaterial({color:0xc9a87c,size:0.8,transparent:true,opacity:0.15,sizeAttenuation:true});
+const pts=new THREE.Points(pGeo,pMat);
+sc.add(pts);
+
+function renderScene(){
+  requestAnimationFrame(renderScene);
+  pts.rotation.y+=0.0002;
+  pts.rotation.x+=0.0001;
+  const t=Date.now()*0.001;
+  spot.intensity=0.35+Math.sin(t*0.5)*0.05;
+  ren.render(sc,cam);
+}
+renderScene();
+
+window.addEventListener('resize',()=>{
+  ren.setSize(window.innerWidth,window.innerHeight);
+  cam.aspect=window.innerWidth/window.innerHeight;
+  cam.updateProjectionMatrix();
+});
+
+// ============================================
+// CATEGORY PILLS
+// ============================================
+const navEl=document.getElementById('catNav');
+tiers.forEach(t=>{
+  const b=document.createElement('button');
+  b.className='cat-pill'+(t.key==='direct'?' active':'');
+  b.textContent=t.label;
+  b.setAttribute('role','tab');
+  b.setAttribute('aria-selected',t.key==='direct'?'true':'false');
+  b.addEventListener('click',()=>{
+    navEl.querySelectorAll('.cat-pill').forEach(p=>{p.classList.remove('active');p.setAttribute('aria-selected','false');});
+    b.classList.add('active');b.setAttribute('aria-selected','true');
+    curTier=t.key;filterRender();
+  });
+  navEl.appendChild(b);
+});
+
+// ============================================
+// CAROUSEL RENDER — 3D arc positions
+// ============================================
+function filterRender(){
+  filtered=movies.filter(m=>m.tier===curTier);
+  idx=0;renderCarousel();
+}
+
+function getArcTransform(offset){
+  // offset: -2, -1, 0 (center), +1, +2
+  // Y position on arc: tiles above go up+back, below go down+back
+  const absOff=Math.abs(offset);
+  const y=offset*130; // vertical spacing in px
+  const z=-absOff*80; // depth into screen
+  const scale=1-absOff*0.1; // shrink peripherals
+  const rotX=offset*-6; // tilt away
+  const opacity=1-absOff*0.25;
+  return {y,z,scale,rotX,opacity};
+}
+
+function renderCarousel(){
+  const carousel=document.getElementById('carousel');
+  carousel.textContent='';
+  if(!filtered.length)return;
+  document.getElementById('counter').textContent=(idx+1)+' / '+filtered.length;
+
+  // Render visible tiles: center + 2 above + 2 below
+  for(let off=-2;off<=2;off++){
+    const mi=(idx+off+filtered.length)%filtered.length;
+    const m=filtered[mi];
+    const arc=getArcTransform(off);
+
+    const tile=document.createElement('div');
+    tile.className='tile';
+    tile.dataset.offset=off;
+    tile.style.transform=`translateY(calc(-50% + ${arc.y}px)) translateZ(${arc.z}px) scale(${arc.scale}) rotateX(${arc.rotX}deg)`;
+    tile.style.opacity=arc.opacity;
+    tile.style.zIndex=10-Math.abs(off);
+    tile.style.pointerEvents=off===0?'auto':'none';
+    tile.style.filter=off===0?'none':`brightness(${0.6-Math.abs(off)*0.1})`;
+
+    const inner=document.createElement('div');
+    inner.className='tile-inner';
+
+    // FRONT
+    const front=document.createElement('div');
+    front.className='tile-front';
+    const img=document.createElement('img');
+    img.src=m.poster;img.alt=m.title+' poster';img.loading=off===0?'eager':'lazy';
+    img.setAttribute('width','340');img.setAttribute('height','510');
+    front.appendChild(img);
+
+    const titleBlock=document.createElement('div');
+    titleBlock.className='tile-title-block';
+    const h2=document.createElement('h2');
+    h2.textContent=m.title;
+    const meta=document.createElement('div');
+    meta.className='tile-meta';
+    const yr=document.createElement('span');
+    yr.className='tile-year';
+    yr.textContent=m.year+' \u2022 '+m.director;
+    meta.appendChild(yr);
+
+    const streamDots=document.createElement('div');
+    streamDots.className='tile-stream-icons';
+    [...m.streaming,'Dopebox'].forEach(p=>{
+      const dot=document.createElement('span');
+      dot.className='tile-stream-dot';
+      dot.style.background=streamColors[p]||'#666';
+      streamDots.appendChild(dot);
+    });
+    meta.appendChild(streamDots);
+    titleBlock.appendChild(h2);
+    titleBlock.appendChild(meta);
+    front.appendChild(titleBlock);
+
+    // BACK — Matte dark finish
+    const back=document.createElement('div');
+    back.className='tile-back';
+
+    const bt=document.createElement('div');bt.className='back-title';bt.textContent=m.title;
+    const bm=document.createElement('div');bm.className='back-meta';
+    bm.appendChild(document.createTextNode(m.year+' \u2022 '+m.director+' '));
+    const lb=document.createElement('span');lb.className='lb-badge';lb.textContent='\u2605 '+m.rating;
+    bm.appendChild(lb);
+    back.appendChild(bt);back.appendChild(bm);
+
+    const syn=document.createElement('p');syn.className='back-synopsis';syn.textContent=m.synopsis;
+    back.appendChild(syn);
+
+    const qb=document.createElement('div');qb.className='quote-block';
+    const q1d=document.createElement('div');q1d.className='quote q1';q1d.textContent=m.q1;
+    const q5d=document.createElement('div');q5d.className='quote q5';q5d.textContent=m.q5;
+    qb.appendChild(q1d);qb.appendChild(q5d);back.appendChild(qb);
+
+    const sl=document.createElement('div');sl.className='section-lbl';sl.textContent='Stream';
+    back.appendChild(sl);
+    const sg=document.createElement('div');sg.className='stream-grid';
+    [...m.streaming,'Dopebox'].forEach(p=>{
+      const a=document.createElement('a');a.href=streamUrl(p,m.title);a.target='_blank';a.rel='noopener noreferrer';
+      a.className='stream-link';a.setAttribute('aria-label','Watch on '+p);
+      a.appendChild(svgEl(IC.play));a.appendChild(document.createTextNode(p));
+      sg.appendChild(a);
+    });
+    back.appendChild(sg);
+
+    const al=document.createElement('div');al.className='section-lbl';al.textContent='React';
+    back.appendChild(al);
+    const ar=document.createElement('div');ar.className='actions-row';
+    [{k:'like',i:IC.up,l:'Like'},{k:'nope',i:IC.down,l:'Not for me'},{k:'love',i:IC.heart,l:'Love'},{k:'seen',i:IC.eye,l:'Watched'},{k:'save',i:IC.mark,l:'Save'}].forEach(a=>{
+      const btn=document.createElement('button');btn.className='act-btn'+(actions[m.id]===a.k?' on':'');
+      btn.setAttribute('aria-label',a.l);btn.setAttribute('aria-pressed',actions[m.id]===a.k?'true':'false');
+      btn.appendChild(svgEl(a.i));
+      btn.addEventListener('click',e=>{e.stopPropagation();
+        const was=actions[m.id]===a.k;actions[m.id]=was?null:a.k;
+        ar.querySelectorAll('.act-btn').forEach(b=>{b.classList.remove('on');b.setAttribute('aria-pressed','false');});
+        if(!was){btn.classList.add('on');btn.setAttribute('aria-pressed','true');}
+      });
+      ar.appendChild(btn);
+    });
+    back.appendChild(ar);
+
+    const srl=document.createElement('div');srl.className='section-lbl';srl.textContent='Rate';
+    back.appendChild(srl);
+    const sr=document.createElement('div');sr.className='star-row';
+    for(let i=1;i<=5;i++){
+      const sb=document.createElement('button');sb.className='star-btn'+((ratings[m.id]||0)>=i?' on':'');
+      sb.setAttribute('aria-label',i+' star'+(i>1?'s':''));
+      sb.appendChild(svgEl((ratings[m.id]||0)>=i?IC.starF:IC.star));
+      sb.addEventListener('click',e=>{e.stopPropagation();
+        ratings[m.id]=ratings[m.id]===i?0:i;
+        sr.querySelectorAll('.star-btn').forEach((s,j)=>{
+          const on=j<(ratings[m.id]||0);s.className='star-btn'+(on?' on':'');
+          s.textContent='';s.appendChild(svgEl(on?IC.starF:IC.star));
+        });
+      });
+      sr.appendChild(sb);
+    }
+    back.appendChild(sr);
+
+    inner.appendChild(front);
+    inner.appendChild(back);
+    tile.appendChild(inner);
+    carousel.appendChild(tile);
+
+    // Center tile tap → flip
+    if(off===0){
+      tile.addEventListener('click',()=>{
+        tile.classList.toggle('flipped');
+      });
+    }
+  }
+
+  // Animate center tile entrance
+  const centerTile=carousel.querySelector('[data-offset="0"]');
+  if(centerTile){
+    gsap.fromTo(centerTile,{opacity:0,y:'-50%'},{opacity:1,duration:0.35,ease:'power3.out',clearProps:'opacity'});
+  }
+}
+
+// ============================================
+// SWIPE PHYSICS
+// ============================================
+let tsy=0,tst=0;
+const area=document.getElementById('carouselArea');
+
+area.addEventListener('touchstart',e=>{
+  if(anim)return;tsy=e.touches[0].clientY;tst=Date.now();
+},{passive:true});
+
+area.addEventListener('touchend',e=>{
+  if(anim)return;
+  const dy=tsy-e.changedTouches[0].clientY;
+  const dt=Date.now()-tst;
+  const v=Math.abs(dy)/Math.max(dt,1);
+  if(Math.abs(dy)>35){
+    const dir=dy>0?1:-1;
+    if(v>1.2){spin(dir,Math.min(Math.floor(v*1.5),filtered.length-1));}
+    else{nav(dir);}
+  }
+},{passive:true});
+
+// Mouse
+let md=false,msy=0,mst=0;
+area.addEventListener('mousedown',e=>{if(anim)return;md=true;msy=e.clientY;mst=Date.now();});
+window.addEventListener('mouseup',e=>{if(!md)return;md=false;
+  const dy=msy-e.clientY,dt=Date.now()-mst,v=Math.abs(dy)/Math.max(dt,1);
+  if(Math.abs(dy)>35){const dir=dy>0?1:-1;v>1.2?spin(dir,Math.min(Math.floor(v*1.5),filtered.length-1)):nav(dir);}
+});
+
+// Keyboard
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowUp')nav(-1);
+  else if(e.key==='ArrowDown')nav(1);
+  else if(e.key===' '){e.preventDefault();const t=document.querySelector('[data-offset="0"]');if(t)t.click();}
+});
+
+function nav(dir){
+  if(anim||!filtered.length)return;anim=true;
+  // Animate all tiles
+  const tiles=document.querySelectorAll('.tile');
+  tiles.forEach(t=>{
+    const off=parseInt(t.dataset.offset);
+    const newOff=off-dir;
+    const arc=getArcTransform(newOff);
+    gsap.to(t,{
+      y:`calc(-50% + ${arc.y}px)`,
+      opacity:Math.abs(newOff)>2?0:arc.opacity,
+      scale:arc.scale,
+      rotateX:arc.rotX,
+      z:arc.z,
+      filter:newOff===0?'brightness(1)':`brightness(${Math.max(0.3,0.6-Math.abs(newOff)*0.1)})`,
+      duration:0.35,
+      ease:'power3.out',
+      onComplete:off===0?()=>{
+        idx=(idx+dir+filtered.length)%filtered.length;
+        renderCarousel();
+        anim=false;
+      }:undefined
+    });
+  });
+}
+
+function spin(dir,count){
+  if(anim||!filtered.length)return;anim=true;
+  let i=0;
+  function step(){
+    if(i>=count){anim=false;return;}
+    const dur=0.06+i*0.02;
+    const tiles=document.querySelectorAll('.tile');
+    const exitY=dir>0?-80:80;
+    const center=document.querySelector('[data-offset="0"]');
+    if(center){
+      gsap.to(center,{y:`calc(-50% + ${exitY}px)`,opacity:0,scale:0.85,duration:dur,ease:'power1.in',
+        onComplete:()=>{
+          idx=(idx+dir+filtered.length)%filtered.length;
+          renderCarousel();
+          i++;
+          if(i<count)step();else anim=false;
+        }
+      });
+    } else {anim=false;}
+  }
+  step();
+}
+
+// Shuffle
+document.getElementById('shuffleBtn').addEventListener('click',()=>{
+  if(anim||!filtered.length)return;
+  spin(1,3+Math.floor(Math.random()*4));
+});
+
+// ============================================
+// INIT
+// ============================================
+filterRender();
+</script>
+</body>
+</html>
