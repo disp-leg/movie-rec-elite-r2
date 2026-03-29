@@ -134,7 +134,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  perspective: 1000px;
+  perspective: 900px;
   perspective-origin: 50% 50%;
 }
 
@@ -157,8 +157,8 @@ body {
   transform-style: preserve-3d;
   cursor: pointer;
   will-change: transform;
-  /* Resting state: subtle 3D tilt showing slab dimensionality */
-  transform: rotateX(1.5deg) rotateY(-0.5deg) translateZ(0px);
+  /* Resting state: 3D tilt showing slab dimensionality */
+  transform: rotateX(3deg) rotateY(-1.5deg) translateZ(0px);
 }
 .tile.flipped .tile-inner {
   transform: rotateY(180deg);
@@ -171,7 +171,7 @@ body {
   transition: transform 500ms var(--ease-dramatic);
 }
 
-/* Front face — THICK SLAB with visible 3D edges and cast shadows */
+/* Front face — THICK PHYSICAL SLAB with real 3D edge geometry */
 .tile-front {
   position: absolute;
   inset: 0;
@@ -180,47 +180,71 @@ body {
   overflow: hidden;
   background: var(--surface);
   /* Real CSS 3D: push the front face forward to create slab thickness */
-  transform: translateZ(6px);
+  transform: translateZ(18px);
   /* Layered shadow cascade: contact → spread → ambient → far diffuse */
   box-shadow:
-    0 1px 2px rgba(0,0,0,0.12),
-    0 4px 8px rgba(0,0,0,0.1),
-    0 12px 28px rgba(0,0,0,0.12),
-    0 28px 56px rgba(0,0,0,0.1),
-    0 56px 80px rgba(0,0,0,0.06);
+    0 2px 4px rgba(0,0,0,0.15),
+    0 6px 12px rgba(0,0,0,0.12),
+    0 16px 36px rgba(0,0,0,0.14),
+    0 36px 64px rgba(0,0,0,0.1),
+    0 64px 96px rgba(0,0,0,0.06);
 }
-/* Slab bottom edge — visible thickness */
+
+/* Slab edge faces — real 3D geometry connecting front face (Z=18) to back
+   Each face is positioned at its edge, then rotated 90° to form a perpendicular wall */
+.slab-bottom {
+  position: absolute;
+  left: 0; right: 0;
+  height: 36px;
+  bottom: 0;
+  background: linear-gradient(to bottom, #d0ccc6 0%, #b8b4ae 30%, #9a968f 70%, #888480 100%);
+  border-radius: 0 0 var(--radius) var(--radius);
+  transform-origin: top center;
+  transform: translateZ(18px) rotateX(-90deg);
+  backface-visibility: hidden;
+}
+.slab-right {
+  position: absolute;
+  top: 0; bottom: 0;
+  right: 0;
+  width: 36px;
+  background: linear-gradient(to right, #ccc8c2 0%, #b4b0aa 30%, #969288 70%, #847f79 100%);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  transform-origin: left center;
+  transform: translateZ(18px) rotateY(90deg);
+  backface-visibility: hidden;
+}
+.slab-left {
+  position: absolute;
+  top: 0; bottom: 0;
+  left: 0;
+  width: 36px;
+  background: linear-gradient(to left, #ccc8c2 0%, #b4b0aa 30%, #969288 70%, #847f79 100%);
+  border-radius: var(--radius) 0 0 var(--radius);
+  transform-origin: right center;
+  transform: translateZ(18px) rotateY(-90deg);
+  backface-visibility: hidden;
+}
+.slab-top {
+  position: absolute;
+  left: 0; right: 0;
+  height: 36px;
+  top: 0;
+  background: linear-gradient(to top, #e0dcd6 0%, #ccc8c2 30%, #b4b0aa 70%, #a8a49e 100%);
+  border-radius: var(--radius) var(--radius) 0 0;
+  transform-origin: bottom center;
+  transform: translateZ(18px) rotateX(90deg);
+  backface-visibility: hidden;
+}
+/* Inner top-left highlight — light catch on physical edge */
 .tile-front::before {
   content: '';
   position: absolute;
-  bottom: -6px;
-  left: 4px; right: 4px;
-  height: 6px;
-  background: linear-gradient(to bottom, rgba(0,0,0,0.15), rgba(0,0,0,0.06));
-  border-radius: 0 0 var(--radius) var(--radius);
-  pointer-events: none;
-  z-index: -1;
-}
-/* Slab right edge — side thickness */
-.tile-front::after {
-  content: '';
-  position: absolute;
-  top: 4px; bottom: 4px;
-  right: -4px;
-  width: 4px;
-  background: linear-gradient(to right, rgba(0,0,0,0.1), rgba(0,0,0,0.03));
-  border-radius: 0 var(--radius) var(--radius) 0;
-  pointer-events: none;
-  z-index: -1;
-}
-/* Inner top-left highlight — light catch on physical edge */
-.tile-front img + .tile-title-block::before {
-  content: '';
-  position: fixed;
   top: 0; left: 0; right: 0;
   height: 1px;
-  background: rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.15);
   pointer-events: none;
+  z-index: 10;
 }
 .tile-front img {
   width: 100%;
@@ -272,7 +296,7 @@ body {
   position: absolute;
   inset: 0;
   backface-visibility: hidden;
-  transform: rotateY(180deg) translateZ(6px);
+  transform: rotateY(180deg) translateZ(18px);
   border-radius: var(--radius);
   background: var(--surface);
   box-shadow:
@@ -688,8 +712,18 @@ function renderTile(){
   }
   back.appendChild(sr);
 
+  // Slab 3D edge faces — real geometry
+  const slabBottom = document.createElement('div'); slabBottom.className = 'slab-bottom';
+  const slabRight = document.createElement('div'); slabRight.className = 'slab-right';
+  const slabLeft = document.createElement('div'); slabLeft.className = 'slab-left';
+  const slabTop = document.createElement('div'); slabTop.className = 'slab-top';
+
   inner.appendChild(front);
   inner.appendChild(back);
+  inner.appendChild(slabBottom);
+  inner.appendChild(slabRight);
+  inner.appendChild(slabLeft);
+  inner.appendChild(slabTop);
   tile.appendChild(inner);
   carousel.appendChild(tile);
 
@@ -700,39 +734,79 @@ function renderTile(){
 }
 
 // ============================================
-// ORBITAL 3D TRANSITION — full exit then enter
-// Inspired by tasteskill.dev orbital rotation
-// Tiles arc AROUND the viewer (-80deg → past 90deg)
+// ORBITAL 3D TRANSITION — tasteskill.dev reference
+// Tile orbits AROUND the viewer: sweeps over/behind
+// then new tile emerges from behind on opposite side.
+// Full departure before any arrival. No overlap.
 // ============================================
-function enterTile(fromDir) {
-  const tile = document.querySelector('.tile');
-  if (!tile) return;
-  // Enter from opposite side: if exited upward, enter from below
-  const startY = fromDir > 0 ? 250 : -250;
-  const startRotX = fromDir > 0 ? -60 : 60; // orbital arc start angle
-  gsap.fromTo(tile,
-    { y: startY, rotateX: startRotX, scale: 0.8, opacity: 0 },
-    { y: 0, rotateX: 1.5, scale: 1, opacity: 1,
-      duration: 0.55, ease: 'power3.out', clearProps: 'filter' }
-  );
-}
+const ORBIT = {
+  exitDur: 0.5,
+  enterDur: 0.6,
+  // Exit: tile sweeps past 90° so it goes BEHIND the viewer
+  exitRotX: 110,   // past 90 = behind the camera plane
+  enterRotX: -110,  // start from behind on opposite side
+  exitZ: -600,      // push deep behind viewer
+  enterZ: -600,
+  exitY: -120,      // slight vertical drift
+  enterY: 120,
+  exitScale: 0.6,
+  enterScale: 0.6,
+};
 
 function exitTile(dir, onDone) {
   const tile = document.querySelector('.tile');
   if (!tile) { onDone(); return; }
-  // Orbital arc exit: tile rotates OVER the viewer's head (or under feet)
-  // Like tasteskill.dev: -80deg → 270deg feel, compressed to exit arc
-  const exitY = dir > 0 ? -350 : 350; // fully off-screen
-  const exitRotX = dir > 0 ? 70 : -70; // dramatic arc rotation
+
+  // Kill any running tweens on this tile
+  gsap.killTweensOf(tile);
+
+  // Orbital exit: tile rotates OVER the viewer and behind
+  const rotX = dir > 0 ? ORBIT.exitRotX : -ORBIT.exitRotX;
+  const driftY = dir > 0 ? ORBIT.exitY : -ORBIT.exitY;
+
   gsap.to(tile, {
-    y: exitY,
-    rotateX: exitRotX,
-    scale: 0.7,
+    rotateX: rotX,
+    z: ORBIT.exitZ,
+    y: driftY,
+    scale: ORBIT.exitScale,
     opacity: 0,
-    duration: 0.45,
-    ease: 'power2.in',
-    onComplete: onDone
+    duration: ORBIT.exitDur,
+    ease: 'power3.in',
+    onComplete: () => {
+      // Fully remove old tile before callback
+      tile.remove();
+      onDone();
+    }
   });
+}
+
+function enterTile(fromDir) {
+  const tile = document.querySelector('.tile');
+  if (!tile) return;
+
+  // Enter from behind on the opposite side
+  const startRotX = fromDir > 0 ? ORBIT.enterRotX : -ORBIT.enterRotX;
+  const startY = fromDir > 0 ? -ORBIT.enterY : ORBIT.enterY;
+
+  gsap.fromTo(tile,
+    {
+      rotateX: startRotX,
+      z: ORBIT.enterZ,
+      y: startY,
+      scale: ORBIT.enterScale,
+      opacity: 0
+    },
+    {
+      rotateX: 3,
+      z: 0,
+      y: 0,
+      scale: 1,
+      opacity: 1,
+      duration: ORBIT.enterDur,
+      ease: 'power2.out',
+      clearProps: 'filter'
+    }
+  );
 }
 
 // ============================================
@@ -749,7 +823,6 @@ function handleSwipe(dy, dt) {
   const v = Math.abs(dy) / Math.max(dt, 1);
 
   if (v > 1.5) {
-    // Fast flick → spin through multiple
     const count = Math.min(Math.floor(v * 1.2), filtered.length - 1);
     spinNav(dir, count);
   } else {
@@ -781,6 +854,29 @@ window.addEventListener('mouseup', e => {
   handleSwipe(msy - e.clientY, Date.now() - mst);
 });
 
+// Scroll wheel — debounced to prevent glitch/rapid-fire
+let wheelAccum = 0, wheelTimer = null;
+area.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (anim) return;
+
+  wheelAccum += e.deltaY;
+  clearTimeout(wheelTimer);
+  wheelTimer = setTimeout(() => {
+    if (Math.abs(wheelAccum) > 30) {
+      const dir = wheelAccum > 0 ? 1 : -1;
+      nav(dir);
+    }
+    wheelAccum = 0;
+  }, 80);
+}, {passive: false});
+
+// Also prevent scroll glitch on document level
+document.addEventListener('wheel', e => {
+  if (e.target.closest('.tile-back')) return; // allow back-face scroll
+  e.preventDefault();
+}, {passive: false});
+
 // Keyboard
 document.addEventListener('keydown', e => {
   if (e.key === 'ArrowUp') nav(-1);
@@ -792,57 +888,64 @@ document.addEventListener('keydown', e => {
   }
 });
 
-// Single nav: FULL EXIT → clear → FULL ENTER
+// Single nav: FULL EXIT → tile removed → FULL ENTER (no overlap)
 function nav(dir) {
   if (anim || !filtered.length) return;
   anim = true;
+
   exitTile(dir, () => {
+    // Old tile is already removed by exitTile
     idx = (idx + dir + filtered.length) % filtered.length;
     renderTile();
     enterTile(dir);
-    // Unlock after enter completes
-    setTimeout(() => { anim = false; gestLock = false; }, 550);
+    // Unlock after enter animation completes
+    setTimeout(() => { anim = false; gestLock = false; }, ORBIT.enterDur * 1000 + 50);
   });
 }
 
-// Spin through multiple: rapid exit/enter cycle with deceleration
+// Spin through multiple: rapid orbital cycles with deceleration
 function spinNav(dir, count) {
   if (anim || !filtered.length) return;
   anim = true;
   let i = 0;
+
   function step() {
     if (i >= count) {
       anim = false; gestLock = false; return;
     }
     const tile = document.querySelector('.tile');
     if (!tile) { anim = false; gestLock = false; return; }
-    // Progressive deceleration: fast start, slow settle
-    const progress = i / count;
-    const exitDur = 0.1 + progress * 0.2;
-    const enterDur = 0.15 + progress * 0.15;
-    const exitY = dir > 0 ? -200 : 200;
-    const exitRot = dir > 0 ? 40 : -40;
 
+    const progress = i / count;
+    const exitDur = 0.12 + progress * 0.2;
+    const enterDur = 0.15 + progress * 0.18;
+    const rotX = dir > 0 ? 80 + progress * 30 : -(80 + progress * 30);
+
+    gsap.killTweensOf(tile);
     gsap.to(tile, {
-      y: exitY, rotateX: exitRot, scale: 0.8, opacity: 0,
-      duration: exitDur, ease: 'power2.in',
+      rotateX: rotX,
+      z: -400,
+      y: dir > 0 ? -80 : 80,
+      scale: 0.7,
+      opacity: 0,
+      duration: exitDur,
+      ease: 'power2.in',
       onComplete: () => {
+        tile.remove();
         idx = (idx + dir + filtered.length) % filtered.length;
         renderTile();
         const newTile = document.querySelector('.tile');
         if (newTile && i < count - 1) {
-          // Quick snap-in for intermediate tiles
           gsap.fromTo(newTile,
-            { y: dir > 0 ? 100 : -100, rotateX: dir > 0 ? -20 : 20, scale: 0.9, opacity: 0 },
-            { y: 0, rotateX: 1.5, scale: 1, opacity: 1,
+            { rotateX: dir > 0 ? -60 : 60, z: -300, y: dir > 0 ? 60 : -60, scale: 0.85, opacity: 0 },
+            { rotateX: 3, z: 0, y: 0, scale: 1, opacity: 1,
               duration: enterDur, ease: 'power2.out',
               onComplete: () => { i++; step(); }
             }
           );
         } else {
-          // Final tile: full dramatic entry
           enterTile(dir);
-          setTimeout(() => { i++; step(); }, 500);
+          setTimeout(() => { i++; step(); }, ORBIT.enterDur * 1000);
         }
       }
     });
