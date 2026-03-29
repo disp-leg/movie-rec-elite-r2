@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Movie Rec — iOS Motion</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{--bg:#f5f5f7;--card:#ffffff;--text:#1d1d1f;--dim:#86868b;--accent:#0071e3;--warm:#ff6b6b;--radius:24px}
+body{background:linear-gradient(180deg,#f5f5f7 0%,#eeeef0 100%);color:var(--text);font-family:'Inter',system-ui,sans-serif;overflow:hidden;height:100vh;width:100vw;max-width:430px;margin:0 auto;position:relative;user-select:none}
+#three-bg{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:0.4}
+.app{position:relative;z-index:2;height:100vh;display:flex;flex-direction:column}
+/* Header */
+.header{padding:20px 24px 0;flex-shrink:0}
+.header h1{font-size:28px;font-weight:700;letter-spacing:-0.5px;color:var(--text)}
+.header .sub{font-size:13px;color:var(--dim);margin-top:4px;font-weight:400}
+/* Pill tabs */
+.pills{display:flex;gap:8px;padding:18px 24px 14px;overflow-x:auto;scrollbar-width:none;flex-shrink:0}
+.pills::-webkit-scrollbar{display:none}
+.pill{white-space:nowrap;padding:9px 20px;border-radius:100px;font-size:13px;font-weight:500;background:rgba(255,255,255,0.65);color:var(--dim);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(0,0,0,0.04);cursor:pointer;transition:all 0.4s cubic-bezier(0.25,0.1,0.25,1);flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,0.04)}
+.pill.active{background:var(--text);color:#fff;box-shadow:0 4px 16px rgba(0,0,0,0.12)}
+/* Card area */
+.card-area{flex:1;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.card-wrap{position:absolute;width:370px;max-width:calc(100vw - 40px)}
+.card{background:var(--card);border-radius:var(--radius);box-shadow:0 8px 32px rgba(0,0,0,0.08),0 2px 8px rgba(0,0,0,0.04);overflow:hidden}
+.poster-section{position:relative;width:100%;aspect-ratio:5/4;overflow:hidden}
+.poster-section img{width:100%;height:100%;object-fit:cover;display:block}
+.card-body{padding:20px 22px 16px}
+.card-body .title{font-size:22px;font-weight:700;letter-spacing:-0.3px;line-height:1.2;margin-bottom:4px}
+.card-body .meta{font-size:12px;color:var(--dim);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.meta .year-badge{color:var(--accent);font-weight:600}
+.meta .lb-score{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;background:rgba(0,113,227,0.06);font-size:11px;color:var(--accent);font-weight:600}
+/* Quotes */
+.quotes{padding:0 22px 14px}
+.quote-card{padding:12px 14px;border-radius:16px;margin-bottom:8px;font-size:12px;line-height:1.6;font-style:italic;color:#555}
+.quote-card.q1{background:rgba(255,59,48,0.04);border-left:3px solid rgba(255,59,48,0.2)}
+.quote-card.q5{background:rgba(52,199,89,0.04);border-left:3px solid rgba(52,199,89,0.2)}
+/* Streaming */
+.stream-row{display:flex;flex-wrap:wrap;gap:6px;padding:0 22px 14px}
+.stream-pill{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:100px;font-size:11px;font-weight:500;background:rgba(255,255,255,0.8);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:var(--dim);text-decoration:none;border:1px solid rgba(0,0,0,0.04);transition:all 0.3s cubic-bezier(0.25,0.1,0.25,1);box-shadow:0 1px 4px rgba(0,0,0,0.03)}
+.stream-pill:hover{background:var(--accent);color:#fff;border-color:transparent;box-shadow:0 4px 12px rgba(0,113,227,0.2)}
+.stream-pill .indicator{width:6px;height:6px;border-radius:50%}
+/* Actions */
+.actions{display:flex;justify-content:center;gap:12px;padding:8px 22px 10px}
+.act{width:38px;height:38px;border-radius:50%;background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.04);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;transition:all 0.3s cubic-bezier(0.25,0.1,0.25,1);color:var(--dim)}
+.act:hover,.act.active{background:var(--text);color:#fff;border-color:transparent;transform:scale(1.08);box-shadow:0 4px 12px rgba(0,0,0,0.12)}
+/* Stars */
+.stars{display:flex;gap:6px;justify-content:center;padding-bottom:18px}
+.st{font-size:22px;cursor:pointer;color:rgba(0,0,0,0.08);transition:all 0.3s cubic-bezier(0.25,0.1,0.25,1)}
+.st.on{color:#ff9500}
+/* Bottom bar */
+.bottom-bar{display:flex;justify-content:space-between;align-items:center;padding:12px 24px 28px;flex-shrink:0;z-index:5}
+.shuffle-pill{display:flex;align-items:center;gap:6px;padding:10px 20px;border-radius:100px;background:rgba(255,255,255,0.7);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(0,0,0,0.04);font-size:13px;font-weight:500;color:var(--dim);cursor:pointer;transition:all 0.3s cubic-bezier(0.25,0.1,0.25,1);box-shadow:0 2px 8px rgba(0,0,0,0.04)}
+.shuffle-pill:hover{background:var(--text);color:#fff;box-shadow:0 4px 16px rgba(0,0,0,0.12)}
+.counter-text{font-size:12px;color:var(--dim);font-weight:500}
+.swipe-hint{font-size:10px;color:var(--dim);opacity:0.4;letter-spacing:0.5px}
+</style>
+</head>
+<body>
+<canvas id="three-bg"></canvas>
+<div class="app">
+  <div class="header">
+    <h1>Movie Rec</h1>
+    <div class="sub">Curated deep cuts based on The Divide</div>
+  </div>
+  <div class="pills" id="pills"></div>
+  <div class="card-area" id="cardArea"></div>
+  <div class="bottom-bar">
+    <button class="shuffle-pill" id="shuffleBtn">&#x1f3b2; Shuffle</button>
+    <span class="swipe-hint">swipe left / right</span>
+    <span class="counter-text" id="counter"></span>
+  </div>
+</div>
+
+<script>
+const movies=[
+{id:1,title:"Right at Your Door",year:2006,director:"Chris Gorak",tier:"direct",poster:"https://image.tmdb.org/t/p/w500/sBkCtdpkWRiisQ3vzyNOZ72biCB.jpg",synopsis:"Dirty bomb hits LA; husband seals himself inside the house while wife is outside. Claustrophobic domestic apocalypse.",streaming:["Tubi","Pluto TV"],rating:3.1,quote1:"\u2605 \"A marriage stress-test disguised as a low-budget LA panic nightmare, and somehow the marriage loses.\"",quote5:"\u2605\u2605\u2605\u2605\u2605 \"Sealed my husband outside during a gas leak once. Didn\u2019t realise this movie was a how-to guide.\""},
+{id:2,title:"Hidden",year:2015,director:"Matt Duffer, Ross Duffer",tier:"direct",poster:"https://image.tmdb.org/t/p/w500/mPuaHaczkoJDzlYD9GyXiDjMXig.jpg",synopsis:"Family hiding in a bunker after an outbreak. Pre-Stranger Things Duffer Brothers.",streaming:["Netflix","Amazon Prime"],rating:3.1,quote1:"\u2605 \"The only way this movie should be watched is split into 10 parts with subway surfers covering half the screen.\"",quote5:"\u2605\u2605\u2605\u2605\u2605 \"The twist absolutely EATS!!!! i was having a fine time for most of it but when the reveal happens OOHHHHH SUDDENLY ITS ALL WORTH IT\""},
+{id:3,title:"Carriers",year:2009,director:"Alex Pastor, David Pastor",tier:"direct",poster:"https://image.tmdb.org/t/p/w500/jxjnjHtHXgvjdhkwpelE9ZwVMg6.jpg",synopsis:"Four survivors navigate a pandemic wasteland with strict rules to avoid infection.",streaming:["Amazon Prime","Tubi"],rating:2.8,quote1:"\u2605 \"Could have been called \u2018How To Be An Asshole at The End Of The World\u2019 and saved everyone 84 minutes of their lives.\"",quote5:"\u2605\u2605\u2605\u2605\u2605 \"I hate this fucking movie and every god damn thing about it but I\u2019ve watched it four times so make of that what you will.\""},
+{id:4,title:"It Comes at Night",year:2017,director:"Trey Edward Shults",tier:"direct",poster:"https://image.tmdb.org/t/p/w500/rNKJpFMlOZn5zkzBPZxEJrQn5Km.jpg",synopsis:"Family boarded up during a plague. Another family arrives. Trust erodes into paranoia and violence.",streaming:["Netflix","Amazon Prime"],rating:3.1,quote1:"\u2605 \"I can\u2019t tell what was worse \u2014 never finding out what comes at night, or the aspect ratio.\"",quote5:"\u2605\u2605\u2605\u2605\u2605 \"Anyone else losing their entire fucking mind\""},
+{id:5,title:"Await Further Instructions",year:2018,director:"Johnny Kevorkian",tier:"direct",poster:"https://image.tmdb.org/t/p/w500/afvi5tVi5S3Ux9faZaI32SmPRkj.jpg",synopsis:"Family trapped on Christmas Day. TV gives increasingly sinister instructions.",streaming:["Netflix","Shudder"],rating:2.5,quote1:"\u2605 \"The writer of this film should be sent to prison. Not metaphorically. Actual prison.\"",quote5:"\u2605\u2605\u2605\u2605\u2605 \"A Christmas movie about a racist family being eaten by their television. I will be revisiting this every December.\""},
+{id:6,title:"Coherence",year:2013,director:"James Ward Byrkit",tier:"claustrophobic",poster:"https://image.tmdb.org/t/p/w500/ezUtb9m5DeLwL2gxi4gktzNCvQv.jpg",synopsis:"Dinner party goes wrong when a comet passes overhead. Reality fractures.",streaming:["Amazon Prime","Tubi"],rating:3.7,quote1:"\u2605 \"The Blair Witch Project for insufferable yuppies who own too many wine glasses.\"",quote5:"\u2605\u2605\u2605\u2605\u2605 \"If there are a million different realities, I have slept with your wife in every single one of them.\""},
+{id:7,title:"Pontypool",year:2008,director:"Bruce McDonald",tier:"claustrophobic",poster:"https://image.tmdb.org/t/p/w500/uh4n9FSYYaeOWchP8gBPNtg7kD7.jpg",synopsis:"Radio DJ trapped in his station as a virus spreads through the English language.",streaming:["Shudder","Tubi"],rating:3.3,quote1:"\u2605 \"Hilarious that a film about radio DJs can\u2019t even get the vocals on the right frequency. Truly committed to the bit.\"",quote5:"\u2605\u2605\u2605\u2605\u2605 \"What if Night of the Living Dead was a locked-in War of the Worlds radio play starring Kawartha Lakes\u2019 Howard Stern? Perfection.\""},
+{id:8,title:"The Platform",year:2019,director:"Galder Gaztelu-Urrutia",tier:"claustrophobic",poster:"https://image.tmdb.org/t/p/w500/iXvQnzy6JCAx1PiQEKXuTY04ZHl.jpg",synopsis:"Vertical prison where food descends level by level. Upper floors feast; lower floors starve.",streaming:["Netflix"],rating:3.4,quote1:"\u2605 \"I was with it and then it ended and now I\u2019m mad. I wanted to throw up and I didn\u2019t even get an explanation. So dumb.\"",quote5:"\u2605\u2605\u2605\u2605\u2605 \"This is the most fucked up Mukbang I\u2019ve ever seen and I genuinely cannot stop thinking about it.\""},
+{id:9,title:"Exam",year:2009,director:"Stuart Hazeldine",tier:"claustrophobic",poster:"https://image.tmdb.org/t/p/w500/i1J2zBCyOQJKsQipqJ0qXERC1Ma.jpg",synopsis:"Eight candidates in a single room for a final job interview. One question, 80 minutes.",streaming:["Tubi","Amazon Prime"],rating:3.3,quote1:"\u2605 \"Eight people locked in a room fail to ask a question for 90 minutes. Truly the most realistic job interview ever filmed.\"",quote5:"\u2605\u2605\u2605\u2605\u2605 \"SAW for people who love riddles and there\u2019s no gore at all, which means it\u2019s somehow more disturbing than SAW.\""},
+{id:10,title:"The Bar",year:2017,director:"Alex de la Iglesia",tier:"claustrophobic",poster:"https://image.tmdb.org/t/p/w500/vYyALnKnzHLv4PoU2b447GYT8R9.jpg",synopsis:"Patrons trapped in a Madrid bar after a sniper kills anyone who exits.",streaming:["Netflix","Amazon Prime"],rating:3.0,quote1:"\u2605 \"Starts as a clever absurdist siege thriller and ends as a loud, boring descent into a sewer. Literally.\"",quote5:"\u2605\u2605\u2605\u2605\u2605 \"People trapped in a Madrid bar after a shooting. Devolved into full Lord of the Flies within 20 minutes. This is peak cinema.\""},
+{id:11,title:"Circle",year:2015,director:"Aaron Hann, Mario Miscione",tier:"survival",poster:"https://image.tmdb.org/t/p/w500/hbIL53MdZFJXsgxXaSOVuApWTs8.jpg",synopsis:"50 strangers in a circle. Every 2 minutes, one dies by group vote.",streaming:["Netflix","Tubi"],rating:2.9,quote1:"\u2605 \"50 people slowly eliminate each other with no explanation and I eliminated myself from the couch after 30 minutes.\"",quote5:"\u2605\u2605\u2605\u2605\u2605 \"What a shitty prize. You get to live on an earth populated by the orphans, pregnant women, and other assholes humanity voted to keep.\""},
+{id:12,title:"Would You Rather",year:2012,director:"David Guy Levy",tier:"survival",poster:"https://image.tmdb.org/t/p/w500/tos5MpjaOsAFVGjjieQlZsHlbd.jpg",synopsis:"Desperate guests at a rich man\u2019s dinner forced into increasingly brutal choices.",streaming:["Tubi","Amazon Prime"],rating:2.8,quote1:"\u2605 \"The good thing about this film is it goes quickly. The bad thing is it exists.\"",quote5:"\u2605\u2605\u2605\u2605\u2605 \"My favourite part was when she forgot she had been stabbed. Method acting in reverse.\""},
+{id:13,title:"Fermat\u2019s Room",year:2007,director:"Luis Piedrahita, Rodrigo Sope\u00f1a",tier:"survival",poster:"https://image.tmdb.org/t/p/w500/qQcYvPXxvk6bQDV9Zgd6cnDQmKZ.jpg",synopsis:"Four mathematicians locked in a room that shrinks unless they solve puzzles.",streaming:["Amazon Prime","Tubi"],rating:3.2,quote1:"\u2605 \"WHAT HAPPENS ON THE GODDAMN BOAT?! This film\u2019s worst sin is attempting intelligence and landing at kindergarten.\"",quote5:"\u2605\u2605\u2605\u2605\u2605 \"My guy was going to kill four people and himself over math. It\u2019s not that deep bro. And yet I respect him completely.\""},
+{id:14,title:"Level 16",year:2018,director:"Danishka Esterhazy",tier:"survival",poster:"https://image.tmdb.org/t/p/w500/glVIjhLmzmgtppLWb3lvnoPljGW.jpg",synopsis:"Girls in a mysterious boarding school discover the horrifying purpose of their captivity.",streaming:["Shudder","Tubi"],rating:3.0,quote1:"\u2605 \"Timely and interminable. A Handmaid\u2019s Tale riff that forgot to include anything happening.\"",quote5:"\u2605\u2605\u2605\u2605\u2605 \"A very clever little Black Mirror riff that made me feel genuinely unsafe in my own bedroom and I live alone.\""},
+{id:15,title:"The Incident",year:2014,director:"Isaac Ezban",tier:"survival",poster:"https://image.tmdb.org/t/p/w500/idb1ACZCQAsYJCFMfs9vgyBIbP1.jpg",synopsis:"Two groups trapped in infinite loops \u2014 one in a stairwell, one on a highway.",streaming:["Amazon Prime","Tubi"],rating:3.1,quote1:"\u2605 \"What was that incident?! The incident was this movie being made and nobody warning me.\"",quote5:"\u2605\u2605\u2605\u2605\u2605 \"A sci-fi horror masterclass in breaking your heart and stealing your sanity. The weight of infinity before your eyes. I am not okay.\""},
+{id:16,title:"Pandorum",year:2009,director:"Christian Alvart",tier:"adjacent",poster:"https://image.tmdb.org/t/p/w500/mNMfa6r3pl0EzFIKEkVcxyr6Rc7.jpg",synopsis:"Crew wakes on a spaceship with no memory. Something is hunting them in the dark.",streaming:["Amazon Prime","Tubi"],rating:3.2,quote1:"\u2605 \"I\u2019ve never been more confused in my life and I once took an Ambien and watched Tenet.\"",quote5:"\u2605\u2605\u2605\u2605\u2605 \"Basically two films in one and both of them slap. Criminally underseen. Dennis Quaid deserved a sequel and a raise.\""},
+{id:17,title:"The Void",year:2016,director:"Jeremy Gillespie, Steven Kostanski",tier:"adjacent",poster:"https://image.tmdb.org/t/p/w500/2WhZAPi3vomEQdzAPIYTvmvWaxI.jpg",synopsis:"People trapped in a hospital surrounded by cultists. Cosmic horror seeps in.",streaming:["Shudder","Tubi"],rating:3.0,quote1:"\u2605 \"This warmed-over Lovecraft nonsense is exactly the dull fate this protagonist deserves, and somehow also me for watching it.\"",quote5:"\u2605\u2605\u2605\u2605\u2605 \"Grim, forlorn dankness, extraterrestrial gods, cultists with knives, and XTREME Carpenter worship. This is everything. I am fed.\""},
+{id:18,title:"Breathing Room",year:2008,director:"John Suits, Gabriel Cowan",tier:"adjacent",poster:"https://image.tmdb.org/t/p/w500/aaz4rgsEjApkUz87OrFT6sNZDks.jpg",synopsis:"Strangers wake in a locked white room wearing explosive collars. Must figure out the rules or die.",streaming:["Tubi"],rating:2.4,quote1:"\u2605 \"Found this in a 10 for $1 used DVD bin. Ten cents feels like maybe a bit much.\"",quote5:"\u2605\u2605\u2605\u2605\u2605 \"A not-as-good version of Exam, which is a compliment, because Exam is incredible and this one still broke my brain on a Tuesday.\""},
+{id:19,title:"The Hole",year:2001,director:"Nick Hamm",tier:"adjacent",poster:"https://image.tmdb.org/t/p/w500/n5aMoI6AZLJzUoNbjMj0P60EYMJ.jpg",synopsis:"Four teens voluntarily lock themselves in a WWII bunker for a party weekend. Things go wrong.",streaming:["Amazon Prime"],rating:2.9,quote1:"\u2605 \"The DVD cover says \u2018super scary. brilliant.\u2019 which is obviously a lie written by someone who has never met either of those things.\"",quote5:"\u2605\u2605\u2605\u2605\u2605 \"Thora Birch locked her friends in an underground bunker to steal a boy and it almost worked. Respect the commitment to the bit.\""},
+{id:20,title:"The Bunker",year:2024,director:"Adrian Langley",tier:"adjacent",poster:"https://image.tmdb.org/t/p/w500/jOA7chFPVzSyPp2DaRg8hqA1BHr.jpg",synopsis:"Survivors in a bunker after nuclear event. Resources dwindle, tensions rise, paranoia sets in.",streaming:["Tubi","Amazon Prime"],rating:2.6,quote1:"\u2605 \"The shit I will sit through for Tobin Bell and Tony Todd. And this is where that journey ends.\"",quote5:"\u2605\u2605\u2605\u2605\u2605 \"The whole film is one long Zoom call about a bioweapon and somehow that\u2019s exactly what I needed on a Friday night.\""}
+];
+
+const tiers=[{key:"direct",label:"Direct Matches"},{key:"claustrophobic",label:"Claustrophobic"},{key:"survival",label:"Survival"},{key:"adjacent",label:"Adjacent"}];
+const streamUrl=(p,t)=>{const e=encodeURIComponent(t),h=t.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/-+$/,'');return{Netflix:`https://www.netflix.com/search?q=${e}`,"Amazon Prime":`https://www.amazon.com/s?k=${e}&i=instant-video`,Shudder:`https://www.shudder.com/search?q=${e}`,Tubi:`https://tubitv.com/search/${e}`,"Pluto TV":`https://pluto.tv/search/details/${e}`,Dopebox:`https://dopebox.to/search/${h}`}[p]||'#'};
+const streamColors={Netflix:"#e50914","Amazon Prime":"#00a8e1",Shudder:"#a259ff",Tubi:"#fa382f","Pluto TV":"#00b3e3",Dopebox:"#34c759"};
+
+let currentTier="direct",filtered=[],idx=0,ratings={},actions={},animating=false;
+
+// Three.js ambient shapes
+const canvas=document.getElementById('three-bg');
+const ren=new THREE.WebGLRenderer({canvas,alpha:true,antialias:true});
+ren.setSize(window.innerWidth,window.innerHeight);
+ren.setPixelRatio(Math.min(window.devicePixelRatio,2));
+const sc=new THREE.Scene();
+const cam=new THREE.PerspectiveCamera(50,window.innerWidth/window.innerHeight,0.1,100);
+cam.position.z=25;
+sc.add(new THREE.AmbientLight(0xffffff,0.5));
+const dl=new THREE.DirectionalLight(0xffffff,0.4);dl.position.set(5,10,8);sc.add(dl);
+
+const shapes=[];
+const geos=[new THREE.SphereGeometry(1.5,32,32),new THREE.TorusGeometry(1,0.4,16,32),new THREE.OctahedronGeometry(1.2),new THREE.SphereGeometry(0.8,32,32),new THREE.IcosahedronGeometry(1)];
+const cols=[0x0071e3,0xff6b6b,0x34c759,0xff9500,0xaf52de];
+for(let i=0;i<5;i++){
+  const mat=new THREE.MeshPhongMaterial({color:cols[i],transparent:true,opacity:0.06,shininess:60});
+  const mesh=new THREE.Mesh(geos[i],mat);
+  mesh.position.set((Math.random()-0.5)*20,(Math.random()-0.5)*16,(Math.random()-0.5)*8);
+  mesh.userData={speed:0.002+Math.random()*0.003,drift:Math.random()*Math.PI*2};
+  sc.add(mesh);shapes.push(mesh);
+}
+
+function animBg(){
+  requestAnimationFrame(animBg);
+  const t=Date.now()*0.001;
+  shapes.forEach(s=>{
+    s.rotation.x+=s.userData.speed;
+    s.rotation.y+=s.userData.speed*0.7;
+    s.position.y+=Math.sin(t+s.userData.drift)*0.003;
+  });
+  ren.render(sc,cam);
+}
+animBg();
+
+window.addEventListener('resize',()=>{ren.setSize(window.innerWidth,window.innerHeight);cam.aspect=window.innerWidth/window.innerHeight;cam.updateProjectionMatrix();});
+
+// Pills
+const pillsEl=document.getElementById('pills');
+tiers.forEach(t=>{
+  const p=document.createElement('div');
+  p.className='pill'+(t.key==='direct'?' active':'');
+  p.textContent=t.label;
+  p.addEventListener('click',()=>{
+    document.querySelectorAll('.pill').forEach(x=>x.classList.remove('active'));
+    p.classList.add('active');
+    currentTier=t.key;
+    filterRender();
+  });
+  pillsEl.appendChild(p);
+});
+
+function filterRender(){
+  filtered=movies.filter(m=>m.tier===currentTier);
+  idx=0;render();
+}
+
+function render(){
+  const area=document.getElementById('cardArea');
+  area.textContent='';
+  if(!filtered.length)return;
+  const m=filtered[idx];
+  document.getElementById('counter').textContent=(idx+1)+'/'+filtered.length;
+
+  const wrap=document.createElement('div');wrap.className='card-wrap';
+  const card=document.createElement('div');card.className='card';
+
+  // Poster
+  const ps=document.createElement('div');ps.className='poster-section';
+  const img=document.createElement('img');img.src=m.poster;img.alt=m.title;img.loading='eager';
+  ps.appendChild(img);card.appendChild(ps);
+
+  // Body
+  const body=document.createElement('div');body.className='card-body';
+  const ti=document.createElement('div');ti.className='title';ti.textContent=m.title;
+  const meta=document.createElement('div');meta.className='meta';
+  const yr=document.createElement('span');yr.className='year-badge';yr.textContent=m.year;
+  meta.appendChild(yr);
+  meta.appendChild(document.createTextNode(' \u2022 '+m.director+' '));
+  const lb=document.createElement('span');lb.className='lb-score';lb.textContent='\u2605 '+m.rating;
+  meta.appendChild(lb);
+  body.appendChild(ti);body.appendChild(meta);card.appendChild(body);
+
+  // Quotes
+  const qd=document.createElement('div');qd.className='quotes';
+  const q1=document.createElement('div');q1.className='quote-card q1';q1.textContent=m.quote1;
+  const q5=document.createElement('div');q5.className='quote-card q5';q5.textContent=m.quote5;
+  qd.appendChild(q1);qd.appendChild(q5);card.appendChild(qd);
+
+  // Streaming
+  const sr=document.createElement('div');sr.className='stream-row';
+  [...m.streaming,'Dopebox'].forEach(p=>{
+    const a=document.createElement('a');a.href=streamUrl(p,m.title);a.target='_blank';a.rel='noopener';a.className='stream-pill';
+    const dot=document.createElement('span');dot.className='indicator';dot.style.background=streamColors[p]||'#888';
+    a.appendChild(dot);a.appendChild(document.createTextNode(p));sr.appendChild(a);
+  });
+  card.appendChild(sr);
+
+  // Actions
+  const ab=document.createElement('div');ab.className='actions';
+  [{k:'like',i:'\u{1F44D}'},{k:'notlike',i:'\u{1F44E}'},{k:'love',i:'\u2764\uFE0F'},{k:'watched',i:'\u{1F441}'},{k:'save',i:'\u{1F516}'}].forEach(a=>{
+    const btn=document.createElement('div');btn.className='act';
+    if(actions[m.id]===a.k)btn.classList.add('active');
+    btn.textContent=a.i;btn.title=a.k;
+    btn.addEventListener('click',e=>{e.stopPropagation();actions[m.id]=actions[m.id]===a.k?null:a.k;
+    document.querySelectorAll('.act').forEach(b=>b.classList.remove('active'));
+    if(actions[m.id])btn.classList.add('active');});
+    ab.appendChild(btn);
+  });
+  card.appendChild(ab);
+
+  // Stars
+  const sd=document.createElement('div');sd.className='stars';
+  for(let i=1;i<=5;i++){
+    const s=document.createElement('span');s.className='st'+((ratings[m.id]||0)>=i?' on':'');
+    s.textContent='\u2605';
+    s.addEventListener('click',e=>{e.stopPropagation();ratings[m.id]=ratings[m.id]===i?0:i;
+    sd.querySelectorAll('.st').forEach((x,j)=>x.classList.toggle('on',j<(ratings[m.id]||0)));});
+    sd.appendChild(s);
+  }
+  card.appendChild(sd);
+
+  wrap.appendChild(card);area.appendChild(wrap);
+
+  // Entry anim — one element at a time, gentle
+  gsap.fromTo(wrap,{x:60,opacity:0},{x:0,opacity:1,duration:0.5,ease:'cubic-bezier(0.25,0.1,0.25,1)'});
+}
+
+// Horizontal swipe
+let tsx=0,tst=0;
+const area=document.getElementById('cardArea');
+area.addEventListener('touchstart',e=>{if(animating)return;tsx=e.touches[0].clientX;tst=Date.now();},{passive:true});
+area.addEventListener('touchend',e=>{if(animating)return;
+  const dx=tsx-e.changedTouches[0].clientX,dt=Date.now()-tst,v=Math.abs(dx)/Math.max(dt,1);
+  if(Math.abs(dx)>30){const dir=dx>0?1:-1;if(v>1.5){spin(dir,Math.min(Math.floor(v*2),filtered.length-1));}else{nav(dir);}}
+},{passive:true});
+
+let md=false,msx=0,mst2=0;
+area.addEventListener('mousedown',e=>{if(animating)return;md=true;msx=e.clientX;mst2=Date.now();});
+window.addEventListener('mouseup',e=>{if(!md)return;md=false;
+  const dx=msx-e.clientX,dt=Date.now()-mst2,v=Math.abs(dx)/Math.max(dt,1);
+  if(Math.abs(dx)>30){const dir=dx>0?1:-1;if(v>1.5){spin(dir,Math.min(Math.floor(v*2),filtered.length-1));}else{nav(dir);}}
+});
+
+document.addEventListener('keydown',e=>{if(e.key==='ArrowLeft')nav(-1);if(e.key==='ArrowRight')nav(1);});
+
+function nav(dir){
+  if(animating||!filtered.length)return;animating=true;
+  const w=document.querySelector('.card-wrap');
+  gsap.to(w,{x:dir>0?-120:120,opacity:0,duration:0.3,ease:'power2.in',onComplete:()=>{
+    idx=(idx+dir+filtered.length)%filtered.length;render();animating=false;}});
+}
+
+function spin(dir,count){
+  if(animating||!filtered.length)return;animating=true;
+  let i=0;function step(){if(i>=count){animating=false;return;}
+  const w=document.querySelector('.card-wrap');
+  gsap.to(w,{x:dir>0?-80:80,opacity:0,duration:0.08+i*0.025,ease:'power1.in',onComplete:()=>{
+    idx=(idx+dir+filtered.length)%filtered.length;render();i++;
+    if(i<count)step();else animating=false;}});}step();
+}
+
+document.getElementById('shuffleBtn').addEventListener('click',()=>{if(animating||!filtered.length)return;spin(1,3+Math.floor(Math.random()*4));});
+
+filterRender();
+</script>
+</body>
+</html>
