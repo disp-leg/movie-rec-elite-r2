@@ -12,21 +12,21 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root {
-  --void: #050508;
-  --surface: #0f0f14;
-  --surface-2: #18181f;
-  --surface-3: #222230;
-  --text: #e8e6e3;
-  --text-dim: #6e6d7a;
-  --text-muted: #44434f;
-  --accent: #c9a87c;
-  --accent-dim: rgba(201,168,124,0.12);
-  --danger-soft: rgba(255,82,82,0.08);
-  --danger-border: rgba(255,82,82,0.2);
-  --success-soft: rgba(100,220,140,0.08);
-  --success-border: rgba(100,220,140,0.2);
-  --radius: 12px;
-  --radius-lg: 16px;
+  --void: #f2f0ed;
+  --surface: #ffffff;
+  --surface-2: #f7f6f4;
+  --surface-3: #eceae6;
+  --text: #1a1a1a;
+  --text-dim: #5c5c5c;
+  --text-muted: #9a9a9a;
+  --accent: #8b6914;
+  --accent-dim: rgba(139,105,20,0.08);
+  --danger-soft: rgba(200,50,50,0.05);
+  --danger-border: rgba(200,50,50,0.18);
+  --success-soft: rgba(40,160,80,0.05);
+  --success-border: rgba(40,160,80,0.18);
+  --radius: 14px;
+  --radius-lg: 18px;
   --radius-pill: 100px;
   --ease: cubic-bezier(0.25, 1, 0.5, 1);
   --ease-dramatic: cubic-bezier(0.16, 1, 0.3, 1);
@@ -53,25 +53,9 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Three.js canvas */
-#scene-canvas {
-  position: fixed;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  z-index: 0;
-  pointer-events: none;
-}
-
-/* Noise grain overlay */
-.grain {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  pointer-events: none;
-  opacity: 0.025;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-  background-repeat: repeat;
-}
+/* Three.js canvas — removed per revision, clean bg only */
+#scene-canvas { display: none; }
+.grain { display: none; }
 
 /* App shell */
 .app {
@@ -125,9 +109,9 @@ body {
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.3px;
-  background: transparent;
+  background: var(--surface);
   color: var(--text-muted);
-  border: 1px solid rgba(255,255,255,0.06);
+  border: 1px solid rgba(0,0,0,0.06);
   cursor: pointer;
   transition: all 250ms var(--ease);
   flex-shrink: 0;
@@ -150,28 +134,31 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  perspective: 1200px;
+  perspective: 1000px;
 }
 
-/* Carousel wrapper — holds all visible tiles */
+/* Carousel wrapper — single tile view */
 .carousel {
   position: relative;
-  width: 85%;
-  max-width: 340px;
-  height: 100%;
+  width: 82%;
+  max-width: 330px;
+  aspect-ratio: 2/3;
   transform-style: preserve-3d;
 }
 
-/* Individual tile in the carousel */
+/* Individual tile — physical slab with volume */
 .tile {
   position: absolute;
   width: 100%;
-  aspect-ratio: 2/3;
+  height: 100%;
   left: 0;
-  top: 50%;
+  top: 0;
   transform-style: preserve-3d;
   cursor: pointer;
   will-change: transform, opacity;
+  /* Subtle resting 3D tilt for dimensional presence */
+  transform: rotateX(2deg) rotateY(-1deg);
+  transition: transform 600ms var(--ease-dramatic);
 }
 .tile.flipped .tile-inner {
   transform: rotateY(180deg);
@@ -184,7 +171,7 @@ body {
   transition: transform 500ms var(--ease-dramatic);
 }
 
-/* Front face */
+/* Front face — TILE: thick slab with visible edge depth */
 .tile-front {
   position: absolute;
   inset: 0;
@@ -192,7 +179,25 @@ body {
   border-radius: var(--radius);
   overflow: hidden;
   background: var(--surface);
-  box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 4px 16px rgba(0,0,0,0.3);
+  /* Multi-layer shadow: contact shadow + spread shadow + ambient */
+  box-shadow:
+    0 2px 4px rgba(0,0,0,0.08),
+    0 8px 24px rgba(0,0,0,0.1),
+    0 24px 48px rgba(0,0,0,0.12),
+    0 48px 80px rgba(0,0,0,0.08);
+  /* 3D slab edge — visible thickness via border-bottom and pseudo */
+  border-bottom: 4px solid rgba(0,0,0,0.12);
+  border-right: 1px solid rgba(0,0,0,0.04);
+}
+.tile-front::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius);
+  /* Inner edge highlight — catches light on top-left like a physical slab */
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), inset 1px 0 0 rgba(255,255,255,0.08);
+  pointer-events: none;
+  z-index: 2;
 }
 .tile-front img {
   width: 100%;
@@ -207,8 +212,8 @@ body {
   position: absolute;
   bottom: 0;
   left: 0; right: 0;
-  padding: 40px 16px 14px;
-  background: linear-gradient(to top, rgba(5,5,8,0.85) 0%, rgba(5,5,8,0.4) 60%, transparent 100%);
+  padding: 40px 16px 16px;
+  background: linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.3) 60%, transparent 100%);
 }
 .tile-title-block h2 {
   font-size: 15px;
@@ -239,7 +244,7 @@ body {
   opacity: 0.6;
 }
 
-/* Back face — MATTE finish, NOT a reversed poster */
+/* Back face — MATTE light finish, same slab depth as front */
 .tile-back {
   position: absolute;
   inset: 0;
@@ -247,13 +252,18 @@ body {
   transform: rotateY(180deg);
   border-radius: var(--radius);
   background: var(--surface);
-  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  box-shadow:
+    0 2px 4px rgba(0,0,0,0.06),
+    0 8px 24px rgba(0,0,0,0.08),
+    0 24px 48px rgba(0,0,0,0.1),
+    0 48px 80px rgba(0,0,0,0.06);
+  border-bottom: 4px solid rgba(0,0,0,0.08);
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 22px 18px;
+  padding: 24px 20px;
   -webkit-overflow-scrolling: touch;
-  /* Matte texture */
-  background-image: linear-gradient(180deg, var(--surface-2) 0%, var(--surface) 100%);
+  /* Subtle warm matte gradient */
+  background-image: linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%);
 }
 
 .back-title {
@@ -332,7 +342,7 @@ body {
   background: var(--surface-2);
   color: var(--text-dim);
   text-decoration: none;
-  border: 1px solid rgba(255,255,255,0.04);
+  border: 1px solid rgba(0,0,0,0.06);
   transition: all 200ms var(--ease);
   min-height: 32px;
   font-family: inherit;
@@ -340,7 +350,7 @@ body {
 .stream-link:hover {
   background: var(--accent-dim);
   color: var(--accent);
-  border-color: rgba(201,168,124,0.15);
+  border-color: rgba(139,105,20,0.15);
 }
 .stream-link svg { width: 12px; height: 12px; flex-shrink: 0; }
 
@@ -355,7 +365,7 @@ body {
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  border: 1px solid rgba(255,255,255,0.06);
+  border: 1px solid rgba(0,0,0,0.06);
   background: var(--surface-2);
   display: flex;
   align-items: center;
@@ -369,7 +379,7 @@ body {
 .act-btn:hover, .act-btn.on {
   background: var(--accent-dim);
   color: var(--accent);
-  border-color: rgba(201,168,124,0.2);
+  border-color: rgba(139,105,20,0.15);
   transform: scale(1.06);
 }
 .act-btn svg { width: 16px; height: 16px; }
@@ -416,7 +426,7 @@ body {
   font-weight: 500;
   background: var(--surface-2);
   color: var(--text-dim);
-  border: 1px solid rgba(255,255,255,0.06);
+  border: 1px solid rgba(0,0,0,0.06);
   cursor: pointer;
   transition: all 250ms var(--ease);
   min-height: 44px;
@@ -424,7 +434,7 @@ body {
 .shuffle-pill:hover {
   background: var(--accent-dim);
   color: var(--accent);
-  border-color: rgba(201,168,124,0.15);
+  border-color: rgba(139,105,20,0.15);
 }
 .shuffle-pill svg { width: 14px; height: 14px; }
 .counter-txt {
@@ -517,64 +527,8 @@ function streamUrl(p,t){
 // ============================================
 const tiers=[{key:"direct",label:"Direct Matches"},{key:"claustrophobic",label:"Claustrophobic"},{key:"survival",label:"Survival"},{key:"adjacent",label:"Adjacent"}];
 let curTier="direct", filtered=[], idx=0, anim=false, ratings={}, actions={};
-const VISIBLE=5; // tiles visible in carousel (center + 2 above + 2 below)
 
-// ============================================
-// THREE.JS — Cinematic void with volumetric light
-// ============================================
-const canvas=document.getElementById('scene-canvas');
-const ren=new THREE.WebGLRenderer({canvas,alpha:true,antialias:true});
-ren.setSize(window.innerWidth,window.innerHeight);
-ren.setPixelRatio(Math.min(window.devicePixelRatio,2));
-ren.shadowMap.enabled=true;
-ren.shadowMap.type=THREE.PCFSoftShadowMap;
-const sc=new THREE.Scene();
-const cam=new THREE.PerspectiveCamera(50,window.innerWidth/window.innerHeight,0.1,100);
-cam.position.z=20;
-
-// Subtle ambient
-sc.add(new THREE.AmbientLight(0x181820,0.6));
-
-// Warm spot from above — cinema projector feel
-const spot=new THREE.SpotLight(0xc9a87c,0.4,40,Math.PI*0.3,0.6);
-spot.position.set(0,12,10);
-spot.castShadow=true;
-sc.add(spot);
-
-// Cool fill from below
-const fill=new THREE.PointLight(0x2a3a5e,0.2,30);
-fill.position.set(0,-8,8);
-sc.add(fill);
-
-// Floating particles
-const pCount=200;
-const pGeo=new THREE.BufferGeometry();
-const pPos=new Float32Array(pCount*3);
-for(let i=0;i<pCount;i++){
-  pPos[i*3]=(Math.random()-0.5)*40;
-  pPos[i*3+1]=(Math.random()-0.5)*40;
-  pPos[i*3+2]=(Math.random()-0.5)*20-5;
-}
-pGeo.setAttribute('position',new THREE.BufferAttribute(pPos,3));
-const pMat=new THREE.PointsMaterial({color:0xc9a87c,size:0.8,transparent:true,opacity:0.15,sizeAttenuation:true});
-const pts=new THREE.Points(pGeo,pMat);
-sc.add(pts);
-
-function renderScene(){
-  requestAnimationFrame(renderScene);
-  pts.rotation.y+=0.0002;
-  pts.rotation.x+=0.0001;
-  const t=Date.now()*0.001;
-  spot.intensity=0.35+Math.sin(t*0.5)*0.05;
-  ren.render(sc,cam);
-}
-renderScene();
-
-window.addEventListener('resize',()=>{
-  ren.setSize(window.innerWidth,window.innerHeight);
-  cam.aspect=window.innerWidth/window.innerHeight;
-  cam.updateProjectionMatrix();
-});
+// Three.js removed per revision — clean light background only
 
 // ============================================
 // CATEGORY PILLS
@@ -595,163 +549,136 @@ tiers.forEach(t=>{
 });
 
 // ============================================
-// CAROUSEL RENDER — 3D arc positions
+// SINGLE TILE RENDER — one card at a time
 // ============================================
 function filterRender(){
   filtered=movies.filter(m=>m.tier===curTier);
-  idx=0;renderCarousel();
+  idx=0;renderTile();
 }
 
-function getArcTransform(offset){
-  // offset: -2, -1, 0 (center), +1, +2
-  // Y position on arc: tiles above go up+back, below go down+back
-  const absOff=Math.abs(offset);
-  const y=offset*130; // vertical spacing in px
-  const z=-absOff*80; // depth into screen
-  const scale=1-absOff*0.1; // shrink peripherals
-  const rotX=offset*-6; // tilt away
-  const opacity=1-absOff*0.25;
-  return {y,z,scale,rotX,opacity};
-}
-
-function renderCarousel(){
+function renderTile(){
   const carousel=document.getElementById('carousel');
   carousel.textContent='';
   if(!filtered.length)return;
   document.getElementById('counter').textContent=(idx+1)+' / '+filtered.length;
+  const m=filtered[idx];
 
-  // Render visible tiles: center + 2 above + 2 below
-  for(let off=-2;off<=2;off++){
-    const mi=(idx+off+filtered.length)%filtered.length;
-    const m=filtered[mi];
-    const arc=getArcTransform(off);
+  const tile=document.createElement('div');
+  tile.className='tile';
+  tile.setAttribute('role','article');
+  tile.setAttribute('aria-label',m.title+' ('+m.year+')');
 
-    const tile=document.createElement('div');
-    tile.className='tile';
-    tile.dataset.offset=off;
-    tile.style.transform=`translateY(calc(-50% + ${arc.y}px)) translateZ(${arc.z}px) scale(${arc.scale}) rotateX(${arc.rotX}deg)`;
-    tile.style.opacity=arc.opacity;
-    tile.style.zIndex=10-Math.abs(off);
-    tile.style.pointerEvents=off===0?'auto':'none';
-    tile.style.filter=off===0?'none':`brightness(${0.6-Math.abs(off)*0.1})`;
+  const inner=document.createElement('div');
+  inner.className='tile-inner';
 
-    const inner=document.createElement('div');
-    inner.className='tile-inner';
+  // FRONT
+  const front=document.createElement('div');
+  front.className='tile-front';
+  const img=document.createElement('img');
+  img.src=m.poster;img.alt=m.title+' poster';img.loading='eager';
+  img.setAttribute('width','330');img.setAttribute('height','495');
+  front.appendChild(img);
 
-    // FRONT
-    const front=document.createElement('div');
-    front.className='tile-front';
-    const img=document.createElement('img');
-    img.src=m.poster;img.alt=m.title+' poster';img.loading=off===0?'eager':'lazy';
-    img.setAttribute('width','340');img.setAttribute('height','510');
-    front.appendChild(img);
+  const titleBlock=document.createElement('div');
+  titleBlock.className='tile-title-block';
+  const h2=document.createElement('h2');
+  h2.textContent=m.title;
+  const meta=document.createElement('div');
+  meta.className='tile-meta';
+  const yr=document.createElement('span');
+  yr.className='tile-year';
+  yr.textContent=m.year+' \u2022 '+m.director;
+  meta.appendChild(yr);
+  const streamDots=document.createElement('div');
+  streamDots.className='tile-stream-icons';
+  [...m.streaming,'Dopebox'].forEach(p=>{
+    const dot=document.createElement('span');
+    dot.className='tile-stream-dot';
+    dot.style.background=streamColors[p]||'#666';
+    streamDots.appendChild(dot);
+  });
+  meta.appendChild(streamDots);
+  titleBlock.appendChild(h2);
+  titleBlock.appendChild(meta);
+  front.appendChild(titleBlock);
 
-    const titleBlock=document.createElement('div');
-    titleBlock.className='tile-title-block';
-    const h2=document.createElement('h2');
-    h2.textContent=m.title;
-    const meta=document.createElement('div');
-    meta.className='tile-meta';
-    const yr=document.createElement('span');
-    yr.className='tile-year';
-    yr.textContent=m.year+' \u2022 '+m.director;
-    meta.appendChild(yr);
+  // BACK — Matte light finish
+  const back=document.createElement('div');
+  back.className='tile-back';
 
-    const streamDots=document.createElement('div');
-    streamDots.className='tile-stream-icons';
-    [...m.streaming,'Dopebox'].forEach(p=>{
-      const dot=document.createElement('span');
-      dot.className='tile-stream-dot';
-      dot.style.background=streamColors[p]||'#666';
-      streamDots.appendChild(dot);
+  const bt=document.createElement('div');bt.className='back-title';bt.textContent=m.title;
+  const bm=document.createElement('div');bm.className='back-meta';
+  bm.appendChild(document.createTextNode(m.year+' \u2022 '+m.director+' '));
+  const lb=document.createElement('span');lb.className='lb-badge';lb.textContent='\u2605 '+m.rating;
+  bm.appendChild(lb);
+  back.appendChild(bt);back.appendChild(bm);
+
+  const syn=document.createElement('p');syn.className='back-synopsis';syn.textContent=m.synopsis;
+  back.appendChild(syn);
+
+  const qb=document.createElement('div');qb.className='quote-block';
+  const q1d=document.createElement('div');q1d.className='quote q1';q1d.textContent=m.q1;
+  const q5d=document.createElement('div');q5d.className='quote q5';q5d.textContent=m.q5;
+  qb.appendChild(q1d);qb.appendChild(q5d);back.appendChild(qb);
+
+  const sl=document.createElement('div');sl.className='section-lbl';sl.textContent='Stream';
+  back.appendChild(sl);
+  const sg=document.createElement('div');sg.className='stream-grid';
+  [...m.streaming,'Dopebox'].forEach(p=>{
+    const a=document.createElement('a');a.href=streamUrl(p,m.title);a.target='_blank';a.rel='noopener noreferrer';
+    a.className='stream-link';a.setAttribute('aria-label','Watch on '+p);
+    a.appendChild(svgEl(IC.play));a.appendChild(document.createTextNode(p));
+    sg.appendChild(a);
+  });
+  back.appendChild(sg);
+
+  const al=document.createElement('div');al.className='section-lbl';al.textContent='React';
+  back.appendChild(al);
+  const ar=document.createElement('div');ar.className='actions-row';
+  [{k:'like',i:IC.up,l:'Like'},{k:'nope',i:IC.down,l:'Not for me'},{k:'love',i:IC.heart,l:'Love'},{k:'seen',i:IC.eye,l:'Watched'},{k:'save',i:IC.mark,l:'Save'}].forEach(a=>{
+    const btn=document.createElement('button');btn.className='act-btn'+(actions[m.id]===a.k?' on':'');
+    btn.setAttribute('aria-label',a.l);btn.setAttribute('aria-pressed',actions[m.id]===a.k?'true':'false');
+    btn.appendChild(svgEl(a.i));
+    btn.addEventListener('click',e=>{e.stopPropagation();
+      const was=actions[m.id]===a.k;actions[m.id]=was?null:a.k;
+      ar.querySelectorAll('.act-btn').forEach(b=>{b.classList.remove('on');b.setAttribute('aria-pressed','false');});
+      if(!was){btn.classList.add('on');btn.setAttribute('aria-pressed','true');}
     });
-    meta.appendChild(streamDots);
-    titleBlock.appendChild(h2);
-    titleBlock.appendChild(meta);
-    front.appendChild(titleBlock);
+    ar.appendChild(btn);
+  });
+  back.appendChild(ar);
 
-    // BACK — Matte dark finish
-    const back=document.createElement('div');
-    back.className='tile-back';
-
-    const bt=document.createElement('div');bt.className='back-title';bt.textContent=m.title;
-    const bm=document.createElement('div');bm.className='back-meta';
-    bm.appendChild(document.createTextNode(m.year+' \u2022 '+m.director+' '));
-    const lb=document.createElement('span');lb.className='lb-badge';lb.textContent='\u2605 '+m.rating;
-    bm.appendChild(lb);
-    back.appendChild(bt);back.appendChild(bm);
-
-    const syn=document.createElement('p');syn.className='back-synopsis';syn.textContent=m.synopsis;
-    back.appendChild(syn);
-
-    const qb=document.createElement('div');qb.className='quote-block';
-    const q1d=document.createElement('div');q1d.className='quote q1';q1d.textContent=m.q1;
-    const q5d=document.createElement('div');q5d.className='quote q5';q5d.textContent=m.q5;
-    qb.appendChild(q1d);qb.appendChild(q5d);back.appendChild(qb);
-
-    const sl=document.createElement('div');sl.className='section-lbl';sl.textContent='Stream';
-    back.appendChild(sl);
-    const sg=document.createElement('div');sg.className='stream-grid';
-    [...m.streaming,'Dopebox'].forEach(p=>{
-      const a=document.createElement('a');a.href=streamUrl(p,m.title);a.target='_blank';a.rel='noopener noreferrer';
-      a.className='stream-link';a.setAttribute('aria-label','Watch on '+p);
-      a.appendChild(svgEl(IC.play));a.appendChild(document.createTextNode(p));
-      sg.appendChild(a);
+  const srl=document.createElement('div');srl.className='section-lbl';srl.textContent='Rate';
+  back.appendChild(srl);
+  const sr=document.createElement('div');sr.className='star-row';
+  for(let i=1;i<=5;i++){
+    const sb=document.createElement('button');sb.className='star-btn'+((ratings[m.id]||0)>=i?' on':'');
+    sb.setAttribute('aria-label',i+' star'+(i>1?'s':''));
+    sb.appendChild(svgEl((ratings[m.id]||0)>=i?IC.starF:IC.star));
+    sb.addEventListener('click',e=>{e.stopPropagation();
+      ratings[m.id]=ratings[m.id]===i?0:i;
+      sr.querySelectorAll('.star-btn').forEach((s,j)=>{
+        const on=j<(ratings[m.id]||0);s.className='star-btn'+(on?' on':'');
+        s.textContent='';s.appendChild(svgEl(on?IC.starF:IC.star));
+      });
     });
-    back.appendChild(sg);
-
-    const al=document.createElement('div');al.className='section-lbl';al.textContent='React';
-    back.appendChild(al);
-    const ar=document.createElement('div');ar.className='actions-row';
-    [{k:'like',i:IC.up,l:'Like'},{k:'nope',i:IC.down,l:'Not for me'},{k:'love',i:IC.heart,l:'Love'},{k:'seen',i:IC.eye,l:'Watched'},{k:'save',i:IC.mark,l:'Save'}].forEach(a=>{
-      const btn=document.createElement('button');btn.className='act-btn'+(actions[m.id]===a.k?' on':'');
-      btn.setAttribute('aria-label',a.l);btn.setAttribute('aria-pressed',actions[m.id]===a.k?'true':'false');
-      btn.appendChild(svgEl(a.i));
-      btn.addEventListener('click',e=>{e.stopPropagation();
-        const was=actions[m.id]===a.k;actions[m.id]=was?null:a.k;
-        ar.querySelectorAll('.act-btn').forEach(b=>{b.classList.remove('on');b.setAttribute('aria-pressed','false');});
-        if(!was){btn.classList.add('on');btn.setAttribute('aria-pressed','true');}
-      });
-      ar.appendChild(btn);
-    });
-    back.appendChild(ar);
-
-    const srl=document.createElement('div');srl.className='section-lbl';srl.textContent='Rate';
-    back.appendChild(srl);
-    const sr=document.createElement('div');sr.className='star-row';
-    for(let i=1;i<=5;i++){
-      const sb=document.createElement('button');sb.className='star-btn'+((ratings[m.id]||0)>=i?' on':'');
-      sb.setAttribute('aria-label',i+' star'+(i>1?'s':''));
-      sb.appendChild(svgEl((ratings[m.id]||0)>=i?IC.starF:IC.star));
-      sb.addEventListener('click',e=>{e.stopPropagation();
-        ratings[m.id]=ratings[m.id]===i?0:i;
-        sr.querySelectorAll('.star-btn').forEach((s,j)=>{
-          const on=j<(ratings[m.id]||0);s.className='star-btn'+(on?' on':'');
-          s.textContent='';s.appendChild(svgEl(on?IC.starF:IC.star));
-        });
-      });
-      sr.appendChild(sb);
-    }
-    back.appendChild(sr);
-
-    inner.appendChild(front);
-    inner.appendChild(back);
-    tile.appendChild(inner);
-    carousel.appendChild(tile);
-
-    // Center tile tap → flip
-    if(off===0){
-      tile.addEventListener('click',()=>{
-        tile.classList.toggle('flipped');
-      });
-    }
+    sr.appendChild(sb);
   }
+  back.appendChild(sr);
 
-  // Animate center tile entrance
-  const centerTile=carousel.querySelector('[data-offset="0"]');
-  if(centerTile){
-    gsap.fromTo(centerTile,{opacity:0,y:'-50%'},{opacity:1,duration:0.35,ease:'power3.out',clearProps:'opacity'});
-  }
+  inner.appendChild(front);
+  inner.appendChild(back);
+  tile.appendChild(inner);
+  carousel.appendChild(tile);
+
+  // Tap to flip
+  tile.addEventListener('click',()=>{ tile.classList.toggle('flipped'); });
+
+  // Smooth entry — tile slides in with subtle 3D settle
+  gsap.fromTo(tile,
+    {y: 30, opacity: 0, rotateX: 4, scale: 0.97},
+    {y: 0, opacity: 1, rotateX: 2, scale: 1, duration: 0.5, ease: 'power3.out'}
+  );
 }
 
 // ============================================
@@ -793,49 +720,48 @@ document.addEventListener('keydown',e=>{
 
 function nav(dir){
   if(anim||!filtered.length)return;anim=true;
-  // Animate all tiles
-  const tiles=document.querySelectorAll('.tile');
-  tiles.forEach(t=>{
-    const off=parseInt(t.dataset.offset);
-    const newOff=off-dir;
-    const arc=getArcTransform(newOff);
-    gsap.to(t,{
-      y:`calc(-50% + ${arc.y}px)`,
-      opacity:Math.abs(newOff)>2?0:arc.opacity,
-      scale:arc.scale,
-      rotateX:arc.rotX,
-      z:arc.z,
-      filter:newOff===0?'brightness(1)':`brightness(${Math.max(0.3,0.6-Math.abs(newOff)*0.1)})`,
-      duration:0.35,
-      ease:'power3.out',
-      onComplete:off===0?()=>{
-        idx=(idx+dir+filtered.length)%filtered.length;
-        renderCarousel();
-        anim=false;
-      }:undefined
-    });
+  const tile=document.querySelector('.tile');
+  if(!tile){anim=false;return;}
+  // Smooth exit — tile peels away with arc + slight 3D rotation
+  gsap.to(tile,{
+    y: dir > 0 ? -120 : 120,
+    opacity: 0,
+    scale: 0.92,
+    rotateX: dir * 12,
+    duration: 0.4,
+    ease: 'power2.inOut',
+    onComplete: () => {
+      idx = (idx + dir + filtered.length) % filtered.length;
+      renderTile();
+      anim = false;
+    }
   });
 }
 
-function spin(dir,count){
+function spin(dir, count){
   if(anim||!filtered.length)return;anim=true;
   let i=0;
   function step(){
     if(i>=count){anim=false;return;}
-    const dur=0.06+i*0.02;
-    const tiles=document.querySelectorAll('.tile');
-    const exitY=dir>0?-80:80;
-    const center=document.querySelector('[data-offset="0"]');
-    if(center){
-      gsap.to(center,{y:`calc(-50% + ${exitY}px)`,opacity:0,scale:0.85,duration:dur,ease:'power1.in',
-        onComplete:()=>{
-          idx=(idx+dir+filtered.length)%filtered.length;
-          renderCarousel();
-          i++;
-          if(i<count)step();else anim=false;
-        }
-      });
-    } else {anim=false;}
+    const tile=document.querySelector('.tile');
+    if(!tile){anim=false;return;}
+    // Progressive deceleration — starts fast, settles smooth
+    const progress = i / count;
+    const dur = 0.1 + progress * 0.15;
+    gsap.to(tile,{
+      y: dir > 0 ? -80 : 80,
+      opacity: 0,
+      scale: 0.94,
+      rotateX: dir * 8,
+      duration: dur,
+      ease: 'power2.in',
+      onComplete: () => {
+        idx = (idx + dir + filtered.length) % filtered.length;
+        renderTile();
+        i++;
+        if(i < count) step(); else anim = false;
+      }
+    });
   }
   step();
 }
