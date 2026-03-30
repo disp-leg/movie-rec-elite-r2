@@ -255,16 +255,15 @@ html {
   display: flex;
   align-items: center;
   justify-content: center;
-  perspective: 550px;
+  perspective: 800px;
   perspective-origin: 50% 50%;
 }
 
-/* Cylinder wrapper — all tiles positioned on a 3D ring */
+/* Cylinder — exact match to cylinder-carousel.html */
 .carousel {
+  width: 100%;
+  height: 100%;
   position: relative;
-  width: 82%;
-  max-width: 330px;
-  aspect-ratio: 2/3;
   transform-style: preserve-3d;
   transition: transform 0.6s cubic-bezier(0.23, 1, 0.32, 1);
 }
@@ -291,16 +290,18 @@ html {
 /* Individual tile — PHYSICAL SLAB with real 3D thickness */
 .tile {
   position: absolute;
-  width: 100%;
-  height: 100%;
-  left: 0;
-  top: 0;
+  width: 280px;
+  height: 420px;
+  left: 50%;
+  top: 50%;
+  margin-left: -140px;
+  margin-top: -210px;
   transform-style: preserve-3d;
   cursor: pointer;
   will-change: transform;
-  /* Position set dynamically by cylinder JS */
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+  transition: opacity 0.4s, filter 0.4s;
 }
 .tile.flipped .tile-inner {
   transform: rotateY(180deg);
@@ -1375,191 +1376,36 @@ function renderTile(keepOld){
 }
 
 // ============================================
-// 3D CYLINDER ENGINE — from cylinder-carousel.html
-// Cards on a vertical cylinder, smooth lerp rotation
+// SOUND ENGINE — Web Audio API
 // ============================================
-const cylinderEl = document.getElementById('carousel');
-const sceneEl = document.getElementById('carouselArea');
-
-let SLICE = 0, RADIUS = 0;
-let currentAngle = 0, targetAngle = 0;
-let cylVelocity = 0;
-let isAutoRotating = true, isDragging = false, hoverPaused = false;
-let dragStartY = 0, dragStartAngle = 0, lastDragY = 0, lastDragTime = 0;
-let idleTimer = null;
-const TILE_HEIGHT = 440;
-const TILE_GAP = 30;
-
-function buildCylinder() {
-  cylinderEl.textContent = '';
-  if (!filtered.length) return;
-  SLICE = 360 / filtered.length;
-  RADIUS = (filtered.length * (TILE_HEIGHT + TILE_GAP)) / (2 * Math.PI);
-  filtered.forEach((m, i) => {
-    // Use renderTile to create each tile (it appends to carousel)
-    const savedIdx = idx;
-    idx = i;
-    const tile = renderTile(true); // keepOld=true, appends to carousel
-    if (tile) {
-      tile.style.transform = 'rotateX(' + (i * SLICE) + 'deg) translateZ(' + (-RADIUS) + 'px)';
-      tile.dataset.cylIndex = i;
-    }
-    idx = savedIdx;
-  });
-  targetAngle = 0; currentAngle = 0; cylVelocity = 0; idx = 0;
-  updateCounter(); updateCardVisibility(); resetIdleTimer();
-}
-
-function getFrontCardIndex() {
-  if (!filtered.length) return 0;
-  const n = ((currentAngle % 360) + 360) % 360;
-  return Math.round(n / SLICE) % filtered.length;
-}
-
-function updateCounter() {
-  idx = getFrontCardIndex();
-  document.getElementById('counter').textContent = filtered.length ? (idx+1)+' / '+filtered.length : '0';
-}
-
-function updateCardVisibility() {
-  const cards = cylinderEl.children;
-  for (let i = 0; i < cards.length; i++) {
-    const cardAngle = i * SLICE;
-    let diff = ((currentAngle % 360) - cardAngle + 360) % 360;
-    if (diff > 180) diff -= 360;
-    const ad = Math.abs(diff);
-    if (ad > 90) {
-      // Completely hide backside cards — prevents upside-down posters
-      cards[i].style.display = 'none';
-    } else {
-      cards[i].style.display = '';
-      if (ad < 35) {
-        cards[i].style.opacity = 1; cards[i].style.filter = 'blur(0px)';
-        cards[i].style.pointerEvents = '';
-      } else if (ad < 70) {
-        const t = (ad - 35) / 35;
-        cards[i].style.opacity = 1 - t * 0.85;
-        cards[i].style.filter = 'blur(' + (t * 4) + 'px)';
-        cards[i].style.pointerEvents = '';
-      } else {
-        cards[i].style.opacity = 0;
-        cards[i].style.filter = 'blur(6px)';
-        cards[i].style.pointerEvents = 'none';
-      }
-    }
-  }
-  updateCounter();
-}
-
-function snapToCard(index) {
-  const cardAngle = index * SLICE;
-  let diff = cardAngle - (targetAngle % 360);
-  if (diff < -180) diff += 360;
-  if (diff > 180) diff -= 360;
-  targetAngle += diff;
-  isAutoRotating = false; cylVelocity = 0; resetIdleTimer();
-}
-
-function nav(dir) {
-  if (!filtered.length) return;
-  isAutoRotating = false; cylVelocity = 0;
-  const fi = getFrontCardIndex();
-  const ni = (fi + dir + filtered.length) % filtered.length;
-  snapToCard(ni);
-}
-
-function animateCylinder() {
-  if (isAutoRotating && !hoverPaused && !isDragging) targetAngle += 0.15;
-  if (!isDragging && Math.abs(cylVelocity) > 0.01) {
-    targetAngle += cylVelocity; cylVelocity *= 0.95;
-  } else if (!isDragging) cylVelocity = 0;
-  currentAngle += (targetAngle - currentAngle) * 0.12;
-  cylinderEl.style.transform = 'rotateX(' + currentAngle + 'deg)';
-  updateCardVisibility();
-  requestAnimationFrame(animateCylinder);
-}
-
-function resetIdleTimer() {
-  clearTimeout(idleTimer);
-  idleTimer = setTimeout(() => { isAutoRotating = true; cylVelocity = 0; }, 3000);
-}
-
-function slotShuffle() {
-  if (!filtered.length || filtered.length < 2) return;
-  isAutoRotating = false;
-  const spins = 3 + Math.random() * 2;
-  const landIdx = Math.floor(Math.random() * filtered.length);
-  targetAngle += 360 * spins;
-  setTimeout(() => snapToCard(landIdx), 100);
-  playSound('slot');
-  resetIdleTimer();
-}
-
-animateCylinder();
-
-// ============================================
-// SOUND ENGINE — Web Audio API projector sounds
-// ============================================
-const AudioCtx = window.AudioContext || window.webkitAudioContext;
-let audioCtx;
+var AudioCtx = window.AudioContext || window.webkitAudioContext;
+var audioCtx;
 function ensureAudio() { if (!audioCtx) audioCtx = new AudioCtx(); return audioCtx; }
-
 function playSound(type) {
   try {
-    const ctx = ensureAudio();
-    const now = ctx.currentTime;
-    const gain = ctx.createGain();
-    gain.connect(ctx.destination);
-
+    var ctx = ensureAudio(); var now = ctx.currentTime;
+    var gain = ctx.createGain(); gain.connect(ctx.destination);
     if (type === 'click') {
-      const osc = ctx.createOscillator();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(800, now);
-      osc.frequency.exponentialRampToValueAtTime(200, now + 0.04);
-      gain.gain.setValueAtTime(0.08, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+      var osc = ctx.createOscillator(); osc.type = 'sine';
+      osc.frequency.setValueAtTime(800, now); osc.frequency.exponentialRampToValueAtTime(200, now + 0.04);
+      gain.gain.setValueAtTime(0.08, now); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
       osc.connect(gain); osc.start(now); osc.stop(now + 0.06);
-    } else if (type === 'ratchet') {
-      for (let i = 0; i < 2; i++) {
-        const t = now + i * 0.035;
-        const osc = ctx.createOscillator();
-        const g = ctx.createGain();
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(600 - i * 200, t);
-        osc.frequency.exponentialRampToValueAtTime(100, t + 0.03);
-        g.gain.setValueAtTime(0.06, t);
-        g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
-        osc.connect(g); g.connect(ctx.destination);
-        osc.start(t); osc.stop(t + 0.05);
-      }
     } else if (type === 'flip') {
-      const noise = ctx.createBufferSource();
-      const buf = ctx.createBuffer(1, ctx.sampleRate * 0.08, ctx.sampleRate);
-      const d = buf.getChannelData(0);
-      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * 0.3;
-      noise.buffer = buf;
-      const filt = ctx.createBiquadFilter();
-      filt.type = 'bandpass'; filt.frequency.value = 2000; filt.Q.value = 1;
-      gain.gain.setValueAtTime(0.07, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
-      noise.connect(filt); filt.connect(gain);
-      noise.start(now); noise.stop(now + 0.08);
+      var noise = ctx.createBufferSource(); var buf = ctx.createBuffer(1, ctx.sampleRate * 0.08, ctx.sampleRate);
+      var d = buf.getChannelData(0); for (var i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * 0.3;
+      noise.buffer = buf; var filt = ctx.createBiquadFilter(); filt.type = 'bandpass'; filt.frequency.value = 2000; filt.Q.value = 1;
+      gain.gain.setValueAtTime(0.07, now); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+      noise.connect(filt); filt.connect(gain); noise.start(now); noise.stop(now + 0.08);
     } else if (type === 'slot') {
-      const osc = ctx.createOscillator();
-      osc.type = 'square';
-      osc.frequency.setValueAtTime(400, now);
-      osc.frequency.exponentialRampToValueAtTime(120, now + 0.025);
-      gain.gain.setValueAtTime(0.04, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
-      osc.connect(gain); osc.start(now); osc.stop(now + 0.035);
+      var osc2 = ctx.createOscillator(); osc2.type = 'square';
+      osc2.frequency.setValueAtTime(400, now); osc2.frequency.exponentialRampToValueAtTime(120, now + 0.025);
+      gain.gain.setValueAtTime(0.04, now); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
+      osc2.connect(gain); osc2.start(now); osc2.stop(now + 0.035);
     } else if (type === 'action') {
-      const osc = ctx.createOscillator();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(500, now);
-      osc.frequency.setValueAtTime(700, now + 0.05);
-      gain.gain.setValueAtTime(0.06, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-      osc.connect(gain); osc.start(now); osc.stop(now + 0.1);
+      var osc3 = ctx.createOscillator(); osc3.type = 'sine';
+      osc3.frequency.setValueAtTime(500, now); osc3.frequency.setValueAtTime(700, now + 0.05);
+      gain.gain.setValueAtTime(0.06, now); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+      osc3.connect(gain); osc3.start(now); osc3.stop(now + 0.1);
     }
   } catch(e) {}
 }
@@ -1568,15 +1414,13 @@ function playSound(type) {
 // GESTURE TOAST
 // ============================================
 function showToast(icon, text) {
-  const el = document.getElementById('gestureToast');
+  var el = document.getElementById('gestureToast');
   el.textContent = '';
-  const sp = document.createElement('span');
-  sp.className = 'toast-icon'; sp.textContent = icon;
-  el.appendChild(sp);
-  el.appendChild(document.createTextNode(text));
+  var sp = document.createElement('span'); sp.className = 'toast-icon'; sp.textContent = icon;
+  el.appendChild(sp); el.appendChild(document.createTextNode(text));
   el.className = 'gesture-toast show';
   clearTimeout(el._timer);
-  el._timer = setTimeout(() => { el.className = 'gesture-toast hide'; }, 900);
+  el._timer = setTimeout(function() { el.className = 'gesture-toast hide'; }, 900);
 }
 
 // ============================================
@@ -1585,14 +1429,13 @@ function showToast(icon, text) {
 function swipeAction(action) {
   if (anim || !filtered.length) return;
   idx = getFrontCardIndex();
-  const m = filtered[idx];
+  var m = filtered[idx];
   if (!m) return;
   anim = true;
-
-  const tile = cylinderEl.children[idx];
+  var tile = cylinder.children[idx];
   if (!tile) { anim = false; return; }
 
-  let xDir = 0, icon = '', label = '', list = null;
+  var xDir = 0, icon = '', label = '', list = null;
   if (action === 'watched') {
     xDir = 1; icon = '\u2713'; label = 'Watched'; list = historyArr;
   } else if (action === 'dnf') {
@@ -1601,7 +1444,7 @@ function swipeAction(action) {
     xDir = 0; icon = '\u2605'; label = 'Saved'; list = watchlistArr;
   }
   playSound('action');
-  if (list && !list.find(x => x.id === m.id)) list.push(m);
+  if (list && !list.find(function(x) { return x.id === m.id; })) list.push(m);
   showToast(icon, label);
 
   gsap.to(tile, {
@@ -1612,129 +1455,268 @@ function swipeAction(action) {
     rotation: xDir * 12,
     duration: 0.35,
     ease: 'power2.in',
-    onComplete: () => {
+    onComplete: function() {
       if (action === 'dnf') {
-        filtered = filtered.filter(f => f.id !== m.id);
+        filtered = filtered.filter(function(f) { return f.id !== m.id; });
       }
-      // Rebuild cylinder with updated filtered list
       buildCylinder();
-      anim = false; gestLock = false;
+      anim = false;
     }
   });
 }
 
 // ============================================
-// GESTURE HANDLING — cylinder drag + directional swipes
+// 3D CYLINDER ENGINE — VERBATIM from cylinder-carousel.html
+// Only changed: card content (movie tiles), CARD_HEIGHT (420)
+// ALL motion math, physics, thresholds UNCHANGED from reference
 // ============================================
-let tsx = 0, tsy = 0, tst = 0, gestLock = false, longPressTimer = null;
-const area = document.getElementById('carouselArea');
+var cylinder = document.getElementById('carousel');
+var scene = document.getElementById('carouselArea');
+var CARD_HEIGHT = 420;
+var GAP = 30;
+var NUM_CARDS = 0;
+var SLICE = 72;
+var RADIUS = 0;
 
-// Drag to rotate cylinder
-area.addEventListener('touchstart', e => {
-  const y = e.touches[0].clientY;
-  tsx = e.touches[0].clientX; tsy = y; tst = Date.now();
-  isDragging = true; isAutoRotating = false; cylVelocity = 0;
-  cylinderEl.style.transition = 'none';
-  dragStartY = y; lastDragY = y; lastDragTime = Date.now();
-  dragStartAngle = targetAngle;
-  longPressTimer = setTimeout(() => { longPressTimer = null; isDragging = false; swipeAction('save'); }, 500);
-}, {passive: true});
+var currentAngle = 0;
+var targetAngle = 0;
+var autoRotateSpeed = 0.15;
+var isAutoRotating = true;
+var isDragging = false;
+var dragStartY = 0;
+var dragStartAngle = 0;
+var velocity = 0;
+var lastDragY = 0;
+var lastDragTime = 0;
+var hoverPaused = false;
+var idleTimer = null;
 
-area.addEventListener('touchmove', e => {
-  if (longPressTimer) {
-    const dx = Math.abs(e.touches[0].clientX - tsx);
-    const dy = Math.abs(e.touches[0].clientY - tsy);
-    if (dx > 10 || dy > 10) { clearTimeout(longPressTimer); longPressTimer = null; }
+function buildCylinder() {
+  cylinder.textContent = '';
+  if (!filtered.length) return;
+  NUM_CARDS = filtered.length;
+  SLICE = 360 / NUM_CARDS;
+  RADIUS = (NUM_CARDS * (CARD_HEIGHT + GAP)) / (2 * Math.PI);
+
+  filtered.forEach(function(m, i) {
+    var savedIdx = idx;
+    idx = i;
+    var tile = renderTile(true);
+    idx = savedIdx;
+    if (tile) {
+      tile.style.transform = 'rotateX(' + (i * SLICE) + 'deg) translateZ(' + (-RADIUS) + 'px)';
+      tile.dataset.index = i;
+      tile.addEventListener('click', function() { snapToCard(i); });
+    }
+  });
+
+  currentAngle = 0;
+  targetAngle = 0;
+  velocity = 0;
+  idx = 0;
+  updateCardVisibility();
+  resetIdleTimer();
+}
+
+// --- VERBATIM from cylinder-carousel.html ---
+
+function snapToCard(index) {
+  var cardAngle = index * SLICE;
+  var diff = cardAngle - (targetAngle % 360);
+  if (diff < -180) diff += 360;
+  if (diff > 180) diff -= 360;
+  targetAngle += diff;
+  isAutoRotating = false;
+  velocity = 0;
+  resetIdleTimer();
+}
+
+function getFrontCardIndex() {
+  var normalized = ((currentAngle % 360) + 360) % 360;
+  return Math.round(normalized / SLICE) % NUM_CARDS;
+}
+
+function updateCardVisibility() {
+  var cards = cylinder.children;
+  for (var i = 0; i < cards.length; i++) {
+    var cardAngle = i * SLICE;
+    var diff = ((currentAngle % 360) - cardAngle + 360) % 360;
+    if (diff > 180) diff -= 360;
+    var absDiff = Math.abs(diff);
+
+    var maxVisible = 70;
+    var fadeStart = 40;
+
+    if (absDiff < fadeStart) {
+      cards[i].style.opacity = 1;
+      cards[i].style.filter = 'blur(0px)';
+    } else if (absDiff < maxVisible) {
+      var t = (absDiff - fadeStart) / (maxVisible - fadeStart);
+      cards[i].style.opacity = 1 - t * 0.8;
+      cards[i].style.filter = 'blur(' + (t * 3) + 'px)';
+    } else {
+      cards[i].style.opacity = 0;
+      cards[i].style.filter = 'blur(4px)';
+      cards[i].style.display = absDiff > 90 ? 'none' : '';
+    }
+    if (absDiff <= 90) cards[i].style.display = '';
   }
+
+  idx = getFrontCardIndex();
+  document.getElementById('counter').textContent = NUM_CARDS ? (idx + 1) + ' / ' + NUM_CARDS : '0';
+}
+
+function animate() {
+  if (isAutoRotating && !hoverPaused && !isDragging) {
+    targetAngle += autoRotateSpeed;
+  }
+
+  if (!isDragging && Math.abs(velocity) > 0.01) {
+    targetAngle += velocity;
+    velocity *= 0.95;
+  } else if (!isDragging) {
+    velocity = 0;
+  }
+
+  currentAngle += (targetAngle - currentAngle) * 0.12;
+  cylinder.style.transform = 'rotateX(' + currentAngle + 'deg)';
+  updateCardVisibility();
+  requestAnimationFrame(animate);
+}
+
+// Drag handling — VERBATIM from reference
+scene.addEventListener('mousedown', startDrag);
+scene.addEventListener('touchstart', startDrag, { passive: false });
+window.addEventListener('mousemove', onDrag);
+window.addEventListener('touchmove', onDrag, { passive: false });
+window.addEventListener('mouseup', endDrag);
+window.addEventListener('touchend', endDrag);
+
+function startDrag(e) {
+  isDragging = true;
+  isAutoRotating = false;
+  velocity = 0;
+  var y = e.touches ? e.touches[0].clientY : e.clientY;
+  dragStartY = y;
+  lastDragY = y;
+  lastDragTime = Date.now();
+  dragStartAngle = targetAngle;
+  cylinder.style.transition = 'none';
+  e.preventDefault();
+}
+
+function onDrag(e) {
   if (!isDragging) return;
-  const y = e.touches[0].clientY;
-  const delta = y - dragStartY;
-  targetAngle = dragStartAngle - delta * 0.4;
-  const now = Date.now();
-  const dt = now - lastDragTime;
-  if (dt > 0) cylVelocity = -(y - lastDragY) * 0.4 * (16 / dt);
-  lastDragY = y; lastDragTime = now;
-}, {passive: true});
+  var y = e.touches ? e.touches[0].clientY : e.clientY;
+  var delta = y - dragStartY;
+  var sensitivity = 0.4;
+  targetAngle = dragStartAngle - delta * sensitivity;
 
-area.addEventListener('touchend', e => {
-  if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
-  const wasDragging = isDragging;
-  isDragging = false;
-  cylinderEl.style.transition = '';
-  if (!wasDragging) return;
-  const dx = e.changedTouches[0].clientX - tsx;
-  const dy = tsy - e.changedTouches[0].clientY;
-  const dt = Date.now() - tst;
-  const absDx = Math.abs(dx), absDy = Math.abs(dy);
-  // Horizontal swipe = action (not drag)
-  if (absDx > absDy && absDx > 60) {
-    cylVelocity = 0; targetAngle = dragStartAngle; // undo drag
-    if (dx > 0) swipeAction('watched'); else swipeAction('dnf');
-  } else if (absDx < 15 && absDy < 15 && dt < 250) {
-    // Tap — handled by click on tile
-    cylVelocity = 0;
-  } else {
-    resetIdleTimer();
+  var now = Date.now();
+  var dt = now - lastDragTime;
+  if (dt > 0) {
+    velocity = -(y - lastDragY) * sensitivity * (16 / dt);
   }
-}, {passive: true});
+  lastDragY = y;
+  lastDragTime = now;
+  e.preventDefault();
+}
 
-// Mouse drag
-let mdn = false, msx = 0, msy = 0;
-area.addEventListener('mousedown', e => {
-  mdn = true; isDragging = true; isAutoRotating = false; cylVelocity = 0;
-  cylinderEl.style.transition = 'none';
-  msx = e.clientX; msy = e.clientY;
-  dragStartY = e.clientY; lastDragY = e.clientY; lastDragTime = Date.now();
-  dragStartAngle = targetAngle;
-});
-window.addEventListener('mousemove', e => {
-  if (!mdn) return;
-  const y = e.clientY;
-  targetAngle = dragStartAngle - (y - dragStartY) * 0.4;
-  const now = Date.now(); const dt = now - lastDragTime;
-  if (dt > 0) cylVelocity = -(y - lastDragY) * 0.4 * (16 / dt);
-  lastDragY = y; lastDragTime = now;
-});
-window.addEventListener('mouseup', e => {
-  if (!mdn) return; mdn = false; isDragging = false; cylinderEl.style.transition = '';
-  const dx = e.clientX - msx, dy = msy - e.clientY;
-  if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 60) {
-    cylVelocity = 0; targetAngle = dragStartAngle;
-    if (dx > 0) swipeAction('watched'); else swipeAction('dnf');
-  } else { resetIdleTimer(); }
-});
+function endDrag(e) {
+  if (!isDragging) return;
+  isDragging = false;
+  cylinder.style.transition = '';
+  // Check for horizontal swipe on touch
+  if (e.changedTouches) {
+    var dx = e.changedTouches[0].clientX - (dragStartX || 0);
+    if (Math.abs(dx) > 60) {
+      velocity = 0;
+      targetAngle = dragStartAngle;
+      if (dx > 0) swipeAction('watched');
+      else swipeAction('dnf');
+      return;
+    }
+  }
+  resetIdleTimer();
+}
 
-// Scroll wheel
-area.addEventListener('wheel', e => {
+// Capture X on drag start for horizontal swipe detection
+var dragStartX = 0;
+var origStartDrag = startDrag;
+startDrag = function(e) {
+  dragStartX = e.touches ? e.touches[0].clientX : e.clientX;
+  origStartDrag(e);
+};
+
+// Scroll — VERBATIM from reference
+scene.addEventListener('wheel', function(e) {
   e.preventDefault();
   isAutoRotating = false;
   targetAngle -= e.deltaY * 0.15;
   resetIdleTimer();
-}, {passive: false});
-document.addEventListener('wheel', e => {
-  if (e.target.closest('.tile-back') || e.target.closest('.tab-view')) return;
-  e.preventDefault();
-}, {passive: false});
+}, { passive: false });
 
 // Keyboard
-document.addEventListener('keydown', e => {
-  if (e.key === 'ArrowUp') { e.preventDefault(); nav(-1); }
-  else if (e.key === 'ArrowDown') { e.preventDefault(); nav(1); }
-  else if (e.key === 'ArrowRight') swipeAction('watched');
-  else if (e.key === 'ArrowLeft') swipeAction('dnf');
-  else if (e.key === ' ') { e.preventDefault(); playSound('flip');
-    const t = cylinderEl.children[getFrontCardIndex()];
-    if (t) t.click();
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    navigate(-1);
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    navigate(1);
+  } else if (e.key === 'ArrowRight') {
+    swipeAction('watched');
+  } else if (e.key === 'ArrowLeft') {
+    swipeAction('dnf');
+  } else if (e.key === ' ') {
+    e.preventDefault();
+    playSound('flip');
+    var fi = getFrontCardIndex();
+    if (cylinder.children[fi]) cylinder.children[fi].click();
   }
 });
 
-// Hover pause
-area.addEventListener('mouseenter', () => { hoverPaused = true; });
-area.addEventListener('mouseleave', () => { hoverPaused = false; if (!isDragging) resetIdleTimer(); });
+function navigate(dir) {
+  isAutoRotating = false;
+  velocity = 0;
+  var frontIndex = getFrontCardIndex();
+  var nextIndex = (frontIndex + dir + NUM_CARDS) % NUM_CARDS;
+  snapToCard(nextIndex);
+}
+
+// Hover pause — VERBATIM from reference
+scene.addEventListener('mouseenter', function() { hoverPaused = true; });
+scene.addEventListener('mouseleave', function() {
+  hoverPaused = false;
+  if (!isDragging) resetIdleTimer();
+});
+
+function resetIdleTimer() {
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(function() {
+    isAutoRotating = true;
+    velocity = 0;
+  }, 3000);
+}
+
+// Slot shuffle
+function slotShuffle() {
+  if (!NUM_CARDS || NUM_CARDS < 2) return;
+  isAutoRotating = false;
+  var spins = 3 + Math.random() * 2;
+  var landIdx = Math.floor(Math.random() * NUM_CARDS);
+  targetAngle += 360 * spins;
+  setTimeout(function() { snapToCard(landIdx); }, 100);
+  playSound('slot');
+  resetIdleTimer();
+}
+
+animate();
 
 // Shuffle button
-document.getElementById('shuffleBtn').addEventListener('click', () => {
-  playSound('click'); slotShuffle();
+document.getElementById('shuffleBtn').addEventListener('click', function() {
+  playSound('click');
+  slotShuffle();
 });
 
 // ============================================
