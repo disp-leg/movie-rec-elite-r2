@@ -1540,7 +1540,7 @@ function swipeAction(action) {
 var cylinder = document.getElementById('carousel');
 var scene = document.getElementById('carouselArea');
 var CARD_WIDTH = 340;
-var GAP = 10;
+var GAP = 300;
 var NUM_CARDS = 0;
 var SLICE = 72;
 var RADIUS = 0;
@@ -1615,22 +1615,29 @@ function updateCardVisibility() {
     if (diff > 180) diff -= 360;
     var absDiff = Math.abs(diff);
 
-    var maxVisible = 50;
-    var fadeStart = 20;
+    var fadeStart = 8;
+    var fadeMid = 20;
+    var maxVisible = 40;
 
     if (absDiff < fadeStart) {
       cards[i].style.opacity = 1;
       cards[i].style.filter = 'blur(0px)';
+      cards[i].style.display = '';
+    } else if (absDiff < fadeMid) {
+      var t = (absDiff - fadeStart) / (fadeMid - fadeStart);
+      cards[i].style.opacity = 0.6 - t * 0.3;
+      cards[i].style.filter = 'blur(' + (t * 2) + 'px)';
+      cards[i].style.display = '';
     } else if (absDiff < maxVisible) {
-      var t = (absDiff - fadeStart) / (maxVisible - fadeStart);
-      cards[i].style.opacity = 1 - t * 0.8;
-      cards[i].style.filter = 'blur(' + (t * 3) + 'px)';
+      var t2 = (absDiff - fadeMid) / (maxVisible - fadeMid);
+      cards[i].style.opacity = 0.3 - t2 * 0.3;
+      cards[i].style.filter = 'blur(' + (2 + t2 * 3) + 'px)';
+      cards[i].style.display = '';
     } else {
       cards[i].style.opacity = 0;
-      cards[i].style.filter = 'blur(4px)';
-      cards[i].style.display = absDiff > 90 ? 'none' : '';
+      cards[i].style.filter = 'blur(5px)';
+      cards[i].style.display = 'none';
     }
-    if (absDiff <= 90) cards[i].style.display = '';
   }
 
   idx = getFrontCardIndex();
