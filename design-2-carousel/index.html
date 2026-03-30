@@ -299,6 +299,8 @@ html {
   cursor: pointer;
   will-change: transform;
   /* Position set dynamically by cylinder JS */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 .tile.flipped .tile-inner {
   transform: rotateY(180deg);
@@ -309,6 +311,8 @@ html {
   height: 100%;
   transform-style: preserve-3d;
   transition: transform 500ms var(--ease-dramatic);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 /* Front face — THICK PHYSICAL SLAB with real 3D edge geometry */
@@ -1424,13 +1428,25 @@ function updateCardVisibility() {
     let diff = ((currentAngle % 360) - cardAngle + 360) % 360;
     if (diff > 180) diff -= 360;
     const ad = Math.abs(diff);
-    if (ad < 35) { cards[i].style.opacity = 1; cards[i].style.filter = 'blur(0px)'; }
-    else if (ad < 70) {
-      const t = (ad - 35) / 35;
-      cards[i].style.opacity = 1 - t * 0.85;
-      cards[i].style.filter = 'blur(' + (t * 4) + 'px)';
-    } else { cards[i].style.opacity = 0; cards[i].style.filter = 'blur(6px)'; cards[i].style.pointerEvents = 'none'; }
-    if (ad < 70) cards[i].style.pointerEvents = '';
+    if (ad > 90) {
+      // Completely hide backside cards — prevents upside-down posters
+      cards[i].style.display = 'none';
+    } else {
+      cards[i].style.display = '';
+      if (ad < 35) {
+        cards[i].style.opacity = 1; cards[i].style.filter = 'blur(0px)';
+        cards[i].style.pointerEvents = '';
+      } else if (ad < 70) {
+        const t = (ad - 35) / 35;
+        cards[i].style.opacity = 1 - t * 0.85;
+        cards[i].style.filter = 'blur(' + (t * 4) + 'px)';
+        cards[i].style.pointerEvents = '';
+      } else {
+        cards[i].style.opacity = 0;
+        cards[i].style.filter = 'blur(6px)';
+        cards[i].style.pointerEvents = 'none';
+      }
+    }
   }
   updateCounter();
 }
