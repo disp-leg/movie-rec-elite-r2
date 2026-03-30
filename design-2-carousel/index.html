@@ -291,11 +291,13 @@ html {
   perspective-origin: 50% 50%;
 }
 
-/* Stack container */
+/* Stack container — fills available space */
 .carousel {
   position: relative;
-  width: min(82vw, 360px);
-  height: calc(min(82vw, 360px) * 1.5);
+  width: 90vw;
+  max-width: 500px;
+  height: 75vh;
+  max-height: 750px;
   transform-style: preserve-3d;
 }
 
@@ -312,6 +314,8 @@ html {
   transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1),
               opacity 0.4s ease,
               filter 0.4s ease;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
 }
 .tile.flipped .tile-inner {
   transform: rotateY(180deg);
@@ -1240,8 +1244,8 @@ function streamUrl(p,t){
 // ============================================
 // STATE
 // ============================================
-const tiers=[{"key": "deep-cuts", "label": "Deep Cuts"},{"key": "hunt-and-survival", "label": "Hunt & Survival"},{"key": "trapped", "label": "Trapped"},{"key": "body-horror", "label": "Body Horror"},{"key": "revenge", "label": "Revenge"},{"key": "supernatural", "label": "Supernatural"},{"key": "killers", "label": "Killers"}];
-let curTier="deep-cuts", filtered=[], idx=0, anim=false, ratings={}, actions={};
+const tiers=[{"key": "all", "label": "All"},{"key": "deep-cuts", "label": "Deep Cuts"},{"key": "hunt-and-survival", "label": "Hunt & Survival"},{"key": "trapped", "label": "Trapped"},{"key": "body-horror", "label": "Body Horror"},{"key": "revenge", "label": "Revenge"},{"key": "supernatural", "label": "Supernatural"},{"key": "killers", "label": "Killers"}];
+let curTier="all", filtered=[], idx=0, anim=false, ratings={}, actions={};
 const watchlistArr=[], historyArr=[], dnfArr=[];
 
 // Three.js removed per revision — clean light background only
@@ -1252,10 +1256,10 @@ const watchlistArr=[], historyArr=[], dnfArr=[];
 const navEl=document.getElementById('catNav');
 tiers.forEach(t=>{
   const b=document.createElement('button');
-  b.className='cat-pill'+(t.key==='deep-cuts'?' active':'');
+  b.className='cat-pill'+(t.key==='all'?' active':'');
   b.textContent=t.label;
   b.setAttribute('role','tab');
-  b.setAttribute('aria-selected',t.key==='deep-cuts'?'true':'false');
+  b.setAttribute('aria-selected',t.key==='all'?'true':'false');
   b.addEventListener('click',()=>{
     navEl.querySelectorAll('.cat-pill').forEach(p=>{p.classList.remove('active');p.setAttribute('aria-selected','false');});
     b.classList.add('active');b.setAttribute('aria-selected','true');
@@ -1268,7 +1272,7 @@ tiers.forEach(t=>{
 // 3D CYLINDER CAROUSEL — adapted from cylinder-carousel.html
 // ============================================
 function filterRender(){
-  filtered=movies.filter(m=>m.tier===curTier);
+  filtered = curTier === 'all' ? movies.slice() : movies.filter(m=>m.tier===curTier);
   idx=0;
   buildStack();
 }
@@ -1295,7 +1299,7 @@ function renderTile(keepOld){
   const img=document.createElement('img');
   img.src=m.poster;img.alt=m.title+' poster';img.loading='eager';
   img.onerror=function(){this.style.display='none';};
-  img.setAttribute('width','500');img.setAttribute('height','750');
+  img.setAttribute('width','500');img.setAttribute('height','750');img.style.objectFit='cover';img.style.width='100%';img.style.height='100%';
   front.appendChild(img);
   const acrylic=document.createElement('div');acrylic.className='acrylic';
   front.appendChild(acrylic);
@@ -1548,16 +1552,16 @@ function positionCard(tile, offset, dragProgress) {
   var absOff = Math.abs(offset - dragProgress);
   var sign = offset - dragProgress > 0 ? 1 : (offset - dragProgress < 0 ? -1 : 0);
 
-  // Scale: center=1, each step shrinks
-  var scale = Math.max(0.65, 1 - absOff * 0.08);
-  // Z depth: center=0, each step recedes
-  var z = -absOff * 50;
-  // Y offset: cards fan out vertically
-  var y = (offset - dragProgress) * 28;
-  // Opacity: center=1, fade out
-  var opacity = Math.max(0, 1 - absOff * 0.3);
+  // Scale: center=1, each step shrinks significantly
+  var scale = Math.max(0.6, 1 - absOff * 0.1);
+  // Z depth: center=0, each step recedes deeply
+  var z = -absOff * 80;
+  // Y offset: cards peek from below/above
+  var y = (offset - dragProgress) * 40;
+  // Opacity: center=1, rapid fade
+  var opacity = Math.max(0, 1 - absOff * 0.4);
   // Blur for depth
-  var blur = Math.min(absOff * 1.5, 5);
+  var blur = Math.min(absOff * 2.5, 6);
   // Z-index: center highest
   var zIdx = 100 - Math.round(absOff * 10);
 
