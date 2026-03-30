@@ -1591,7 +1591,8 @@ function buildCylinder() {
 
 function snapToCard(index) {
   var cardAngle = index * SLICE;
-  var diff = cardAngle - (targetAngle % 360);
+  var normalized = ((targetAngle % 360) + 360) % 360;
+  var diff = cardAngle - normalized;
   if (diff < -180) diff += 360;
   if (diff > 180) diff -= 360;
   targetAngle += diff;
@@ -1601,6 +1602,7 @@ function snapToCard(index) {
 }
 
 function getFrontCardIndex() {
+  if (!NUM_CARDS) return 0;
   var normalized = ((currentAngle % 360) + 360) % 360;
   return Math.round(normalized / SLICE) % NUM_CARDS;
 }
