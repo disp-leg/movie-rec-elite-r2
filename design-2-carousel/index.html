@@ -255,17 +255,36 @@ html {
   display: flex;
   align-items: center;
   justify-content: center;
-  perspective: 900px;
+  perspective: 800px;
   perspective-origin: 50% 50%;
 }
 
-/* Carousel wrapper — single tile view */
+/* Cylinder wrapper — all tiles positioned on a 3D ring */
 .carousel {
   position: relative;
   width: 82%;
   max-width: 330px;
   aspect-ratio: 2/3;
   transform-style: preserve-3d;
+}
+
+/* Fade edges of carousel area */
+.carousel-area::before,
+.carousel-area::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  height: 80px;
+  z-index: 2;
+  pointer-events: none;
+}
+.carousel-area::before {
+  top: 0;
+  background: linear-gradient(to bottom, var(--void) 0%, transparent 100%);
+}
+.carousel-area::after {
+  bottom: 0;
+  background: linear-gradient(to top, var(--void) 0%, transparent 100%);
 }
 
 /* Individual tile — PHYSICAL SLAB with real 3D thickness */
@@ -278,8 +297,7 @@ html {
   transform-style: preserve-3d;
   cursor: pointer;
   will-change: transform;
-  /* Resting state: 3D tilt showing slab dimensionality */
-  transform: rotateX(3deg) rotateY(-1.5deg) translateZ(0px);
+  /* Position set dynamically by cylinder JS */
 }
 .tile.flipped .tile-inner {
   transform: rotateY(180deg);
@@ -1197,13 +1215,15 @@ tiers.forEach(t=>{
 });
 
 // ============================================
-// SINGLE TILE RENDER — one card at a time
+// 3D CYLINDER CAROUSEL — adapted from cylinder-carousel.html
 // ============================================
 function filterRender(){
   filtered=movies.filter(m=>m.tier===curTier);
-  idx=0;renderTile();
+  idx=0;
+  buildCylinder();
 }
 
+// Legacy renderTile for swipe actions (single tile mode)
 function renderTile(keepOld){
   const carousel=document.getElementById('carousel');
   if (!keepOld) carousel.textContent='';
@@ -1350,156 +1370,114 @@ function renderTile(keepOld){
 }
 
 // ============================================
-// VERTICAL FERRIS WHEEL — Framer 3D Loop (rotated 90°)
-//
-// Geometry: vertical circle with center ABOVE the display position.
-// Circle center is at (y=R, z=0). Display is at the bottom (θ=0).
-//
-// EXIT path (swipe up → tile goes up, toward viewer, over head):
-//   y = R * (1 - cos(θ))     rises from 0 → 2R
-//   z = R * sin(θ)            toward viewer (peaks at 90°) then recedes
-//   rotateX = -θ              tilts backward as it arcs over
-//
-// ENTER path (next tile rises from below-behind into display):
-//   y = -R * (1 - cos(θ))    below (negative y)
-//   z = -R * sin(θ)           behind (negative z)
-//   rotateX = θ               tilts forward as it approaches
-//   θ sweeps from startAngle → 0
-//
-// The tile visibly GROWS (z → positive → closer via CSS perspective)
-// as it approaches the viewer, creating the signature "swell" effect.
+// 3D CYLINDER ENGINE — from cylinder-carousel.html
+// Cards on a vertical cylinder, smooth lerp rotation
 // ============================================
-const ORBIT = {
-  dur: 0.75,
-  radius: 350,
-  exitAngle: 140,
-  enterAngle: 100,
-};
+const cylinderEl = document.getElementById('carousel');
+const sceneEl = document.getElementById('carouselArea');
 
-// Exit arc: tile rises up, approaches viewer, goes over head
-function exitPos(angleDeg, R, dir) {
-  const rad = angleDeg * Math.PI / 180;
-  const s = dir > 0 ? 1 : -1; // 1=up, -1=down
-  return {
-    y: s * -R * (1 - Math.cos(rad)),
-    z: R * Math.sin(rad),
-    rotX: s * angleDeg,
-  };
+let SLICE = 0, RADIUS = 0;
+let currentAngle = 0, targetAngle = 0;
+let cylVelocity = 0;
+let isAutoRotating = false, isDragging = false, hoverPaused = false;
+let dragStartY = 0, dragStartAngle = 0, lastDragY = 0, lastDragTime = 0;
+let idleTimer = null;
+const TILE_HEIGHT = 440;
+const TILE_GAP = 40;
+
+function buildCylinder() {
+  cylinderEl.textContent = '';
+  if (!filtered.length) return;
+  SLICE = 360 / filtered.length;
+  RADIUS = (filtered.length * (TILE_HEIGHT + TILE_GAP)) / (2 * Math.PI);
+  filtered.forEach((m, i) => {
+    // Use renderTile to create each tile (it appends to carousel)
+    const savedIdx = idx;
+    idx = i;
+    const tile = renderTile(true); // keepOld=true, appends to carousel
+    if (tile) {
+      tile.style.transform = 'rotateX(' + (i * SLICE) + 'deg) translateZ(' + (-RADIUS) + 'px)';
+      tile.dataset.cylIndex = i;
+    }
+    idx = savedIdx;
+  });
+  targetAngle = 0; currentAngle = 0; cylVelocity = 0; idx = 0;
+  updateCounter(); updateCardVisibility(); resetIdleTimer();
 }
 
-// Enter arc: tile rises from below/behind into display position
-function enterPos(angleDeg, R, dir) {
-  const rad = angleDeg * Math.PI / 180;
-  const s = dir > 0 ? 1 : -1;
-  return {
-    y: s * R * (1 - Math.cos(rad)),
-    z: -R * Math.sin(rad),
-    rotX: s * -angleDeg,
-  };
+function getFrontCardIndex() {
+  if (!filtered.length) return 0;
+  const n = ((currentAngle % 360) + 360) % 360;
+  return Math.round(n / SLICE) % filtered.length;
 }
 
-// Smooth cosine fade
-function cosFade(progress, holdUntil) {
-  if (progress < holdUntil) return 1;
-  return Math.cos((progress - holdUntil) / (1 - holdUntil) * Math.PI * 0.5);
+function updateCounter() {
+  idx = getFrontCardIndex();
+  document.getElementById('counter').textContent = filtered.length ? (idx+1)+' / '+filtered.length : '0';
+}
+
+function updateCardVisibility() {
+  const cards = cylinderEl.children;
+  for (let i = 0; i < cards.length; i++) {
+    const cardAngle = i * SLICE;
+    let diff = ((currentAngle % 360) - cardAngle + 360) % 360;
+    if (diff > 180) diff -= 360;
+    const ad = Math.abs(diff);
+    if (ad < 40) { cards[i].style.opacity = 1; cards[i].style.filter = 'blur(0px)'; }
+    else if (ad < 70) {
+      const t = (ad - 40) / 30;
+      cards[i].style.opacity = 1 - t * 0.8;
+      cards[i].style.filter = 'blur(' + (t * 3) + 'px)';
+    } else { cards[i].style.opacity = 0.1; cards[i].style.filter = 'blur(4px)'; }
+  }
+  updateCounter();
+}
+
+function snapToCard(index) {
+  const cardAngle = index * SLICE;
+  let diff = cardAngle - (targetAngle % 360);
+  if (diff < -180) diff += 360;
+  if (diff > 180) diff -= 360;
+  targetAngle += diff;
+  isAutoRotating = false; cylVelocity = 0; resetIdleTimer();
 }
 
 function nav(dir) {
-  if (anim || !filtered.length) return;
-  anim = true;
-
-  const oldTile = document.querySelector('.tile');
-  const R = ORBIT.radius;
-
-  idx = (idx + dir + filtered.length) % filtered.length;
-  const newTile = renderTile(true);
-
-  if (oldTile && newTile && oldTile !== newTile) {
-    gsap.set(newTile, { opacity: 0 });
-    const state = { t: 0 };
-
-    gsap.to(state, {
-      t: 1,
-      duration: ORBIT.dur,
-      ease: 'power2.inOut',
-      onUpdate: () => {
-        const t = state.t;
-
-        // EXIT: sweep from 0° → exitAngle
-        const ea = t * ORBIT.exitAngle;
-        const ep = exitPos(ea, R, dir);
-        const exitOp = cosFade(t, 0.35);
-        gsap.set(oldTile, {
-          y: ep.y, z: ep.z, rotateX: ep.rotX,
-          opacity: Math.max(0, exitOp),
-        });
-
-        // ENTER: sweep from enterAngle → 0°
-        const na = (1 - t) * ORBIT.enterAngle;
-        const np = enterPos(na, R, dir);
-        const enterOp = cosFade(1 - t, 0.35);
-        gsap.set(newTile, {
-          y: np.y, z: np.z, rotateX: np.rotX,
-          opacity: Math.max(0, enterOp),
-        });
-      },
-      onComplete: () => {
-        oldTile.remove();
-        gsap.set(newTile, { y: 0, z: 0, rotateX: 3, opacity: 1, clearProps: 'filter' });
-        anim = false; gestLock = false;
-      }
-    });
-  } else {
-    if (newTile) gsap.set(newTile, { opacity: 1 });
-    anim = false; gestLock = false;
-  }
+  if (!filtered.length) return;
+  isAutoRotating = false; cylVelocity = 0;
+  const fi = getFrontCardIndex();
+  const ni = (fi + dir + filtered.length) % filtered.length;
+  snapToCard(ni);
 }
 
-// Spin: rapid ferris wheel steps
-function spinNav(dir, count) {
-  if (anim || !filtered.length) return;
-  anim = true;
-  let i = 0;
-
-  function step() {
-    if (i >= count) { anim = false; gestLock = false; return; }
-
-    const oldTile = document.querySelector('.tile');
-    const R = ORBIT.radius * 0.6;
-    const progress = i / count;
-    const dur = 0.1 + progress * 0.15;
-
-    idx = (idx + dir + filtered.length) % filtered.length;
-    const newTile = renderTile(true);
-
-    if (oldTile && newTile && oldTile !== newTile) {
-      gsap.set(newTile, { opacity: 0 });
-      const state = { t: 0 };
-
-      gsap.to(state, {
-        t: 1,
-        duration: dur,
-        ease: 'power2.inOut',
-        onUpdate: () => {
-          const t = state.t;
-          const ep = exitPos(t * 100, R, dir);
-          gsap.set(oldTile, { y: ep.y, z: ep.z, rotateX: ep.rotX, opacity: Math.max(0, 1 - t * 1.5) });
-
-          const np = enterPos((1 - t) * 70, R, dir);
-          gsap.set(newTile, { y: np.y, z: np.z, rotateX: np.rotX, opacity: Math.min(1, t * 1.5) });
-        },
-        onComplete: () => {
-          oldTile.remove();
-          gsap.set(newTile, { y: 0, z: 0, rotateX: 3, opacity: 1 });
-          i++; step();
-        }
-      });
-    } else {
-      i++; step();
-    }
-  }
-  step();
+function animateCylinder() {
+  if (isAutoRotating && !hoverPaused && !isDragging) targetAngle += 0.08;
+  if (!isDragging && Math.abs(cylVelocity) > 0.01) {
+    targetAngle += cylVelocity; cylVelocity *= 0.95;
+  } else if (!isDragging) cylVelocity = 0;
+  currentAngle += (targetAngle - currentAngle) * 0.12;
+  cylinderEl.style.transform = 'rotateX(' + currentAngle + 'deg)';
+  updateCardVisibility();
+  requestAnimationFrame(animateCylinder);
 }
+
+function resetIdleTimer() {
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => { isAutoRotating = true; cylVelocity = 0; }, 4000);
+}
+
+function slotShuffle() {
+  if (!filtered.length || filtered.length < 2) return;
+  isAutoRotating = false;
+  const spins = 3 + Math.random() * 2;
+  const landIdx = Math.floor(Math.random() * filtered.length);
+  targetAngle += 360 * spins;
+  setTimeout(() => snapToCard(landIdx), 100);
+  playSound('slot');
+  resetIdleTimer();
+}
+
+animateCylinder();
 
 // ============================================
 // SOUND ENGINE — Web Audio API projector sounds
@@ -1588,11 +1566,12 @@ function showToast(icon, text) {
 // ============================================
 function swipeAction(action) {
   if (anim || !filtered.length) return;
+  idx = getFrontCardIndex();
   const m = filtered[idx];
   if (!m) return;
   anim = true;
 
-  const tile = document.querySelector('.tile');
+  const tile = cylinderEl.children[idx];
   if (!tile) { anim = false; return; }
 
   let xDir = 0, icon = '', label = '', list = null;
@@ -1616,88 +1595,30 @@ function swipeAction(action) {
     duration: 0.35,
     ease: 'power2.in',
     onComplete: () => {
-      tile.remove();
       if (action === 'dnf') {
         filtered = filtered.filter(f => f.id !== m.id);
-        if (idx >= filtered.length) idx = 0;
-      } else {
-        idx = (idx + 1) % filtered.length;
       }
-      if (filtered.length) {
-        const nt = renderTile(false);
-        if (nt) {
-          gsap.fromTo(nt,
-            { opacity: 0, y: 30, scale: 0.95 },
-            { opacity: 1, y: 0, scale: 1, duration: 0.35, ease: 'power2.out' }
-          );
-        }
-      }
-      document.getElementById('counter').textContent = filtered.length ? (idx+1)+' / '+filtered.length : '0';
+      // Rebuild cylinder with updated filtered list
+      buildCylinder();
       anim = false; gestLock = false;
     }
   });
 }
 
 // ============================================
-// SLOT MACHINE SHUFFLE
-// ============================================
-function slotShuffle() {
-  if (anim || !filtered.length || filtered.length < 2) return;
-  anim = true;
-  const totalSpins = 6 + Math.floor(Math.random() * 4);
-  let i = 0;
-
-  function spin() {
-    if (i >= totalSpins) {
-      anim = false; gestLock = false;
-
-      return;
-    }
-    const oldTile = document.querySelector('.tile');
-    const progress = i / totalSpins;
-    const dur = 0.06 + progress * progress * 0.22;
-
-    idx = (idx + 1) % filtered.length;
-    const newTile = renderTile(true);
-    playSound('slot');
-
-    if (oldTile && newTile && oldTile !== newTile) {
-      gsap.set(newTile, { y: 80, opacity: 0 });
-      gsap.to(oldTile, {
-        y: -80, opacity: 0,
-        duration: dur * 0.6,
-        ease: 'power1.in',
-      });
-      gsap.to(newTile, {
-        y: 0, opacity: 1,
-        duration: dur,
-        ease: i >= totalSpins - 1 ? 'back.out(1.2)' : 'power1.out',
-        onComplete: () => {
-          oldTile.remove();
-          gsap.set(newTile, { y: 0, z: 0, rotateX: 3, opacity: 1 });
-          i++; spin();
-        }
-      });
-    } else { i++; spin(); }
-  }
-  spin();
-}
-
-// ============================================
-// GESTURE HANDLING — multi-directional
+// GESTURE HANDLING — cylinder drag + directional swipes
 // ============================================
 let tsx = 0, tsy = 0, tst = 0, gestLock = false, longPressTimer = null;
 const area = document.getElementById('carouselArea');
 
+// Drag to rotate cylinder
 area.addEventListener('touchstart', e => {
-  if (anim) return;
-  tsx = e.touches[0].clientX;
-  tsy = e.touches[0].clientY;
-  tst = Date.now();
-  longPressTimer = setTimeout(() => {
-    longPressTimer = null;
-    swipeAction('save');
-  }, 500);
+  const y = e.touches[0].clientY;
+  tsx = e.touches[0].clientX; tsy = y; tst = Date.now();
+  isDragging = true; isAutoRotating = false; cylVelocity = 0;
+  dragStartY = y; lastDragY = y; lastDragTime = Date.now();
+  dragStartAngle = targetAngle;
+  longPressTimer = setTimeout(() => { longPressTimer = null; isDragging = false; swipeAction('save'); }, 500);
 }, {passive: true});
 
 area.addEventListener('touchmove', e => {
@@ -1706,91 +1627,93 @@ area.addEventListener('touchmove', e => {
     const dy = Math.abs(e.touches[0].clientY - tsy);
     if (dx > 10 || dy > 10) { clearTimeout(longPressTimer); longPressTimer = null; }
   }
+  if (!isDragging) return;
+  const y = e.touches[0].clientY;
+  const delta = y - dragStartY;
+  targetAngle = dragStartAngle - delta * 0.4;
+  const now = Date.now();
+  const dt = now - lastDragTime;
+  if (dt > 0) cylVelocity = -(y - lastDragY) * 0.4 * (16 / dt);
+  lastDragY = y; lastDragTime = now;
 }, {passive: true});
 
 area.addEventListener('touchend', e => {
   if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
-  if (anim || gestLock) return;
+  const wasDragging = isDragging;
+  isDragging = false;
+  if (!wasDragging) return;
   const dx = e.changedTouches[0].clientX - tsx;
   const dy = tsy - e.changedTouches[0].clientY;
   const dt = Date.now() - tst;
   const absDx = Math.abs(dx), absDy = Math.abs(dy);
-
-  if (absDx < 15 && absDy < 15 && dt < 300) return; // tap — handled by click
-
-  if (absDx > absDy && absDx > 50) {
-    gestLock = true;
-
-    if (dx > 0) swipeAction('watched');
-    else swipeAction('dnf');
-  } else if (absDy > 40) {
-    gestLock = true;
-
-    nav(dy > 0 ? 1 : -1);
+  // Horizontal swipe = action (not drag)
+  if (absDx > absDy && absDx > 60) {
+    cylVelocity = 0; targetAngle = dragStartAngle; // undo drag
+    if (dx > 0) swipeAction('watched'); else swipeAction('dnf');
+  } else if (absDx < 15 && absDy < 15 && dt < 250) {
+    // Tap — handled by click on tile
+    cylVelocity = 0;
+  } else {
+    resetIdleTimer();
   }
 }, {passive: true});
 
-// Mouse drag (desktop)
-let mdn = false, msx = 0, msy = 0, mst = 0;
+// Mouse drag
+let mdn = false, msx = 0, msy = 0;
 area.addEventListener('mousedown', e => {
-  if (anim) return;
-  mdn = true; msx = e.clientX; msy = e.clientY; mst = Date.now();
+  mdn = true; isDragging = true; isAutoRotating = false; cylVelocity = 0;
+  msx = e.clientX; msy = e.clientY;
+  dragStartY = e.clientY; lastDragY = e.clientY; lastDragTime = Date.now();
+  dragStartAngle = targetAngle;
+});
+window.addEventListener('mousemove', e => {
+  if (!mdn) return;
+  const y = e.clientY;
+  targetAngle = dragStartAngle - (y - dragStartY) * 0.4;
+  const now = Date.now(); const dt = now - lastDragTime;
+  if (dt > 0) cylVelocity = -(y - lastDragY) * 0.4 * (16 / dt);
+  lastDragY = y; lastDragTime = now;
 });
 window.addEventListener('mouseup', e => {
-  if (!mdn) return; mdn = false;
-  const dx = e.clientX - msx;
-  const dy = msy - e.clientY;
-  const absDx = Math.abs(dx), absDy = Math.abs(dy);
-  if (absDx > absDy && absDx > 50) {
-    gestLock = true;
-    if (dx > 0) swipeAction('watched');
-    else swipeAction('dnf');
-  } else if (absDy > 40) {
-    gestLock = true;
-
-    nav(dy > 0 ? 1 : -1);
-  }
+  if (!mdn) return; mdn = false; isDragging = false;
+  const dx = e.clientX - msx, dy = msy - e.clientY;
+  if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 60) {
+    cylVelocity = 0; targetAngle = dragStartAngle;
+    if (dx > 0) swipeAction('watched'); else swipeAction('dnf');
+  } else { resetIdleTimer(); }
 });
 
 // Scroll wheel
-let wheelAccum = 0, wheelTimer = null;
 area.addEventListener('wheel', e => {
   e.preventDefault();
-  if (anim) return;
-  wheelAccum += e.deltaY;
-  clearTimeout(wheelTimer);
-  wheelTimer = setTimeout(() => {
-    if (Math.abs(wheelAccum) > 30) {
-
-      nav(wheelAccum > 0 ? 1 : -1);
-    }
-    wheelAccum = 0;
-  }, 80);
+  isAutoRotating = false;
+  targetAngle -= e.deltaY * 0.15;
+  resetIdleTimer();
 }, {passive: false});
-
 document.addEventListener('wheel', e => {
-  if (e.target.closest('.tile-back')) return;
+  if (e.target.closest('.tile-back') || e.target.closest('.tab-view')) return;
   e.preventDefault();
 }, {passive: false});
 
 // Keyboard
 document.addEventListener('keydown', e => {
-  if (e.key === 'ArrowUp') { nav(-1); }
-  else if (e.key === 'ArrowDown') { nav(1); }
+  if (e.key === 'ArrowUp') { e.preventDefault(); nav(-1); }
+  else if (e.key === 'ArrowDown') { e.preventDefault(); nav(1); }
   else if (e.key === 'ArrowRight') swipeAction('watched');
   else if (e.key === 'ArrowLeft') swipeAction('dnf');
-  else if (e.key === ' ') {
-    e.preventDefault();
-    playSound('flip');
-    const t = document.querySelector('.tile');
+  else if (e.key === ' ') { e.preventDefault(); playSound('flip');
+    const t = cylinderEl.children[getFrontCardIndex()];
     if (t) t.click();
   }
 });
 
-// Shuffle button — slot machine style
+// Hover pause
+area.addEventListener('mouseenter', () => { hoverPaused = true; });
+area.addEventListener('mouseleave', () => { hoverPaused = false; if (!isDragging) resetIdleTimer(); });
+
+// Shuffle button
 document.getElementById('shuffleBtn').addEventListener('click', () => {
-  playSound('click');
-  slotShuffle();
+  playSound('click'); slotShuffle();
 });
 
 // ============================================
