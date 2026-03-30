@@ -1528,6 +1528,7 @@ var WHEEL_ANGLE_STEP = 0;
 var WHEEL_NUM = 0;
 var wheelFlippedIdx = -1;
 var genreScrollMemory = {};
+var wheelPrevTier = null;
 var wheelAnimId = null;
 
 // Canvas rounded-rect helper (verbatim from prototype)
@@ -1637,7 +1638,10 @@ function createBackTexture(movie) {
   var ctx = canvas.getContext('2d');
   var cr = 24;
 
+  // Mirror horizontally so text reads correctly when mesh is rotated 180 on Y
   ctx.save();
+  ctx.translate(CANVAS_W, 0);
+  ctx.scale(-1, 1);
   roundRect(ctx, 0, 0, CANVAS_W, CANVAS_H, cr);
   ctx.clip();
 
@@ -1726,10 +1730,11 @@ function createBackTexture(movie) {
 function buildWheel() {
   var mountEl = document.getElementById('carouselArea');
 
-  // Save genre scroll position
-  if (wheelGroup && curTier) {
-    genreScrollMemory[curTier] = wheelGroup.rotation.x;
+  // Save previous genre's scroll position
+  if (wheelGroup && wheelPrevTier) {
+    genreScrollMemory[wheelPrevTier] = wheelGroup.rotation.x;
   }
+  wheelPrevTier = curTier;
 
   // Init Three.js on first call
   if (!wheelRenderer) {
@@ -1846,29 +1851,64 @@ function updateCounter() {
   document.getElementById('counter').textContent = WHEEL_NUM ? (ci + 1) + ' / ' + WHEEL_NUM : '0';
 }
 
-// === FLIP CENTER TILE ===
+// === FLIP CENTER TILE — horizontal card flip with GSAP ===
+var wheelFlipping = false;
+
 function flipCenterTile() {
   var ci = getCenterIdx();
   var mesh = wheelMeshes[ci];
-  if (!mesh) return;
+  if (!mesh || wheelFlipping) return;
+
+  wheelFlipping = true;
   playSound('flip');
 
-  if (mesh.userData.flipped) {
-    // Flip back to front — reload front texture
-    mesh.userData.flipped = false;
-    createFrontTexture(filtered[ci], function(tex) {
-      mesh.material.map = tex;
-      mesh.material.needsUpdate = true;
-    });
-  } else {
-    // Flip to back
-    mesh.userData.flipped = true;
-    if (!mesh.userData.backTexture) {
-      mesh.userData.backTexture = createBackTexture(filtered[ci]);
-    }
-    mesh.material.map = mesh.userData.backTexture;
-    mesh.material.needsUpdate = true;
+  var isFlipped = mesh.userData.flipped;
+  var targetRotY = isFlipped ? 0 : Math.PI;
+
+  // Prepare back texture if needed
+  if (!isFlipped && !mesh.userData.backTexture) {
+    mesh.userData.backTexture = createBackTexture(filtered[ci]);
   }
+
+  // Store front texture if not cached
+  if (!mesh.userData.frontTexture && mesh.material.map) {
+    mesh.userData.frontTexture = mesh.material.map;
+  }
+
+  // Animate local Y rotation: 0 → PI or PI → 0
+  var flipState = { r: isFlipped ? Math.PI : 0 };
+  var midPassed = false;
+
+  gsap.to(flipState, {
+    r: targetRotY,
+    duration: 0.5,
+    ease: 'power2.inOut',
+    onUpdate: function() {
+      // Apply local rotation (relative to tile's position on cylinder)
+      mesh.rotation.y = flipState.r;
+
+      // Swap texture at the midpoint (edge-on)
+      var mid = isFlipped ? Math.PI / 2 : Math.PI / 2;
+      if (!midPassed && Math.abs(flipState.r - mid) < 0.15) {
+        midPassed = true;
+        if (isFlipped) {
+          // Flipping back to front
+          if (mesh.userData.frontTexture) {
+            mesh.material.map = mesh.userData.frontTexture;
+            mesh.material.needsUpdate = true;
+          }
+        } else {
+          // Flipping to back
+          mesh.material.map = mesh.userData.backTexture;
+          mesh.material.needsUpdate = true;
+        }
+      }
+    },
+    onComplete: function() {
+      mesh.userData.flipped = !isFlipped;
+      wheelFlipping = false;
+    }
+  });
 }
 
 // === ANIMATION LOOP — verbatim from prototype ===
@@ -1876,7 +1916,7 @@ function wheelAnimate() {
   wheelAnimId = requestAnimationFrame(wheelAnimate);
   if (!wheelGroup) return;
 
-  if (!wheelDragging) {
+  if (!wheelDragging && !wheelFlipping) {
     wheelVelocity *= FRICTION;
     if (Math.abs(wheelVelocity) < 0.00003) wheelVelocity = 0;
     wheelGroup.rotation.x += wheelVelocity;
@@ -1891,6 +1931,7 @@ var mountEl = document.getElementById('carouselArea');
 
 mountEl.addEventListener('mousedown', function(e) {
   e.preventDefault();
+  if (wheelFlipping) return;
   wheelDragging = true;
   wheelLastY = e.clientY;
   wheelLastX = e.clientX;
@@ -1928,6 +1969,7 @@ window.addEventListener('mouseup', function(e) {
 });
 
 mountEl.addEventListener('touchstart', function(e) {
+  if (wheelFlipping) return;
   wheelDragging = true;
   wheelLastY = e.touches[0].clientY;
   wheelLastX = e.touches[0].clientX;
