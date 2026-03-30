@@ -287,7 +287,7 @@ html {
   display: flex;
   align-items: center;
   justify-content: center;
-  perspective: 800px;
+  perspective: 450px;
   perspective-origin: 50% 50%;
 }
 
@@ -344,8 +344,6 @@ html {
   height: 100%;
   transform-style: preserve-3d;
   transition: transform 500ms var(--ease-dramatic);
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
 }
 
 /* Front face — THICK PHYSICAL SLAB with real 3D edge geometry */
@@ -355,7 +353,7 @@ html {
   backface-visibility: hidden;
   border-radius: var(--radius);
   overflow: hidden;
-  background: var(--surface);
+  background: linear-gradient(135deg, #2a2a3a 0%, #1a1a2a 50%, #0a0a1a 100%);
   /* Real CSS 3D: push the front face forward to create slab thickness */
   transform: translateZ(12px);
   /* Layered shadow cascade: contact → spread → ambient → far diffuse */
@@ -1318,6 +1316,7 @@ function renderTile(keepOld){
   front.className='tile-front';
   const img=document.createElement('img');
   img.src=m.poster;img.alt=m.title+' poster';img.loading='eager';
+  img.onerror=function(){this.style.display='none';};
   img.setAttribute('width','380');img.setAttribute('height','253');
   front.appendChild(img);
   const acrylic=document.createElement('div');acrylic.className='acrylic';
