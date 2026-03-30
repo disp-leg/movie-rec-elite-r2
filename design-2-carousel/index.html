@@ -1340,33 +1340,55 @@ function renderTile(keepOld){
 }
 
 // ============================================
-// VERTICAL ORBITAL SEMI-CIRCLE — Framer 3D Loop style
-// Viewer is at the CENTER of a vertical circle.
-// Tiles orbit around the viewer on a conveyor arc.
-// θ=0 = display (front). Positive θ = up/over. Negative θ = below.
-// SIMULTANEOUS exit + enter for conveyor continuity.
+// VERTICAL FERRIS WHEEL — Framer 3D Loop (rotated 90°)
+//
+// Geometry: vertical circle with center ABOVE the display position.
+// Circle center is at (y=R, z=0). Display is at the bottom (θ=0).
+//
+// EXIT path (swipe up → tile goes up, toward viewer, over head):
+//   y = R * (1 - cos(θ))     rises from 0 → 2R
+//   z = R * sin(θ)            toward viewer (peaks at 90°) then recedes
+//   rotateX = -θ              tilts backward as it arcs over
+//
+// ENTER path (next tile rises from below-behind into display):
+//   y = -R * (1 - cos(θ))    below (negative y)
+//   z = -R * sin(θ)           behind (negative z)
+//   rotateX = θ               tilts forward as it approaches
+//   θ sweeps from startAngle → 0
+//
+// The tile visibly GROWS (z → positive → closer via CSS perspective)
+// as it approaches the viewer, creating the signature "swell" effect.
 // ============================================
 const ORBIT = {
-  dur: 0.7,           // total transition duration
-  radius: 380,        // orbital radius
-  exitAngle: 110,     // how far current tile travels (past overhead)
-  enterAngle: 110,    // how far new tile starts below
+  dur: 0.75,
+  radius: 350,
+  exitAngle: 140,
+  enterAngle: 100,
 };
 
-// Vertical circle position. θ=0 = display center.
-// Positive θ = upward arc toward/over viewer.
-// z uses (1-cosθ) so tile approaches viewer as it rises.
-function orbitPos(angleDeg, R, dir) {
+// Exit arc: tile rises up, approaches viewer, goes over head
+function exitPos(angleDeg, R, dir) {
   const rad = angleDeg * Math.PI / 180;
-  const sign = dir > 0 ? 1 : -1; // 1=up, -1=down
+  const s = dir > 0 ? 1 : -1; // 1=up, -1=down
   return {
-    y: sign * -R * Math.sin(rad),
-    z: R * (1 - Math.cos(rad)),
-    rotX: sign * angleDeg,
+    y: s * -R * (1 - Math.cos(rad)),
+    z: R * Math.sin(rad),
+    rotX: s * angleDeg,
   };
 }
 
-// Smooth cosine fade: holds at 1 then gently drops
+// Enter arc: tile rises from below/behind into display position
+function enterPos(angleDeg, R, dir) {
+  const rad = angleDeg * Math.PI / 180;
+  const s = dir > 0 ? 1 : -1;
+  return {
+    y: s * R * (1 - Math.cos(rad)),
+    z: -R * Math.sin(rad),
+    rotX: s * -angleDeg,
+  };
+}
+
+// Smooth cosine fade
 function cosFade(progress, holdUntil) {
   if (progress < holdUntil) return 1;
   return Math.cos((progress - holdUntil) / (1 - holdUntil) * Math.PI * 0.5);
@@ -1379,11 +1401,9 @@ function nav(dir) {
   const oldTile = document.querySelector('.tile');
   const R = ORBIT.radius;
 
-  // Prepare next tile (keep old alive for simultaneous animation)
   idx = (idx + dir + filtered.length) % filtered.length;
-  const newTile = renderTile(true); // keepOld=true
+  const newTile = renderTile(true);
 
-  // If old tile exists, run SIMULTANEOUS exit + enter
   if (oldTile && newTile && oldTile !== newTile) {
     gsap.set(newTile, { opacity: 0 });
     const state = { t: 0 };
@@ -1395,19 +1415,19 @@ function nav(dir) {
       onUpdate: () => {
         const t = state.t;
 
-        // EXIT: current tile sweeps from 0° → exitAngle (up and over)
-        const exitAngle = t * ORBIT.exitAngle;
-        const ep = orbitPos(exitAngle, R, dir);
-        const exitOp = cosFade(t, 0.4);
+        // EXIT: sweep from 0° → exitAngle
+        const ea = t * ORBIT.exitAngle;
+        const ep = exitPos(ea, R, dir);
+        const exitOp = cosFade(t, 0.35);
         gsap.set(oldTile, {
           y: ep.y, z: ep.z, rotateX: ep.rotX,
           opacity: Math.max(0, exitOp),
         });
 
-        // ENTER: next tile sweeps from -enterAngle → 0° (below into center)
-        const enterAngle = (1 - t) * ORBIT.enterAngle;
-        const np = orbitPos(enterAngle, R, -dir);
-        const enterOp = cosFade(1 - t, 0.4);
+        // ENTER: sweep from enterAngle → 0°
+        const na = (1 - t) * ORBIT.enterAngle;
+        const np = enterPos(na, R, dir);
+        const enterOp = cosFade(1 - t, 0.35);
         gsap.set(newTile, {
           y: np.y, z: np.z, rotateX: np.rotX,
           opacity: Math.max(0, enterOp),
@@ -1420,13 +1440,12 @@ function nav(dir) {
       }
     });
   } else {
-    // No old tile (first render or edge case)
     if (newTile) gsap.set(newTile, { opacity: 1 });
     anim = false; gestLock = false;
   }
 }
 
-// Spin: rapid sequential conveyor steps
+// Spin: rapid ferris wheel steps
 function spinNav(dir, count) {
   if (anim || !filtered.length) return;
   anim = true;
@@ -1436,7 +1455,7 @@ function spinNav(dir, count) {
     if (i >= count) { anim = false; gestLock = false; return; }
 
     const oldTile = document.querySelector('.tile');
-    const R = ORBIT.radius * 0.7;
+    const R = ORBIT.radius * 0.6;
     const progress = i / count;
     const dur = 0.1 + progress * 0.15;
 
@@ -1453,12 +1472,10 @@ function spinNav(dir, count) {
         ease: 'power2.inOut',
         onUpdate: () => {
           const t = state.t;
-          const ea = t * 100;
-          const ep = orbitPos(ea, R, dir);
+          const ep = exitPos(t * 100, R, dir);
           gsap.set(oldTile, { y: ep.y, z: ep.z, rotateX: ep.rotX, opacity: Math.max(0, 1 - t * 1.5) });
 
-          const na = (1 - t) * 80;
-          const np = orbitPos(na, R, -dir);
+          const np = enterPos((1 - t) * 70, R, dir);
           gsap.set(newTile, { y: np.y, z: np.z, rotateX: np.rotX, opacity: Math.min(1, t * 1.5) });
         },
         onComplete: () => {
