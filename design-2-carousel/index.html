@@ -45,12 +45,7 @@
   }
 }
 body {
-  background: var(--void);
-  background-image:
-    radial-gradient(ellipse at 20% 20%, rgba(140,170,210,0.18) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 70%, rgba(120,160,200,0.14) 0%, transparent 50%),
-    radial-gradient(ellipse at 50% 100%, rgba(180,200,220,0.12) 0%, transparent 40%),
-    linear-gradient(180deg, #edf1f5 0%, #e4e8ee 40%, #dde2e9 100%);
+  background: #07060b;
   color: var(--text);
   font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
   overflow: hidden;
@@ -94,8 +89,11 @@ html {
   justify-content: space-between;
   padding: 12px 20px;
   flex-shrink: 0;
-  position: relative;
-  z-index: 10;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
   background: var(--glass);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
@@ -231,8 +229,11 @@ html {
   overflow-x: auto;
   scrollbar-width: none;
   flex-shrink: 0;
-  position: relative;
-  z-index: 10;
+  position: absolute;
+  top: 56px;
+  left: 0;
+  right: 0;
+  z-index: 20;
 }
 .cat-nav::-webkit-scrollbar { display: none; }
 .cat-pill {
@@ -279,22 +280,20 @@ html {
     inset 0 -0.5px 0 rgba(0,0,0,0.04);
 }
 
-/* Carousel area — deep perspective for orbital motion */
-/* Three.js hamster wheel container */
+/* Carousel area — Three.js hamster wheel container */
 .carousel-area {
   flex: 1;
   position: relative;
   overflow: hidden;
+  background: #07060b;
   cursor: grab;
 }
 .carousel-area:active { cursor: grabbing; }
 .carousel-area canvas { display: block; width: 100% !important; height: 100% !important; }
-
-/* Vignette spotlight overlay */
 .wheel-vignette {
   position: absolute;
   top: 0; left: 0; width: 100%; height: 100%;
-  background: radial-gradient(ellipse 80% 70% at 50% 50%, transparent 22%, rgba(220,224,230,0.5) 60%, rgba(220,224,230,0.92) 100%);
+  background: radial-gradient(ellipse 80% 70% at 50% 50%, transparent 22%, rgba(7,6,11,0.5) 60%, rgba(7,6,11,0.92) 100%);
   pointer-events: none;
   z-index: 2;
 }
@@ -700,8 +699,11 @@ html {
   align-items: center;
   padding: 8px 20px;
   flex-shrink: 0;
-  position: relative;
-  z-index: 10;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
 }
 .shuffle-pill {
   display: flex;
@@ -1509,14 +1511,15 @@ var COVERAGE = 0.752;
 var TEXTURE_SCALE = 1.68;
 var CANVAS_W = Math.round(PLANE_W * TEXTURE_SCALE);
 var CANVAS_H = Math.round(PLANE_H * TEXTURE_SCALE);
-var FRICTION = 0.955;
+var currentTileIdx = 0;
+var targetRotation = 0;
+var isAnimating = false;
 
 var wheelGroup = null;
 var wheelMeshes = [];
 var wheelRenderer = null;
 var wheelCamera = null;
 var wheelScene = null;
-var wheelVelocity = 0;
 var wheelDragging = false;
 var wheelLastY = 0;
 var wheelLastTime = 0;
@@ -1739,7 +1742,7 @@ function buildWheel() {
   // Init Three.js on first call
   if (!wheelRenderer) {
     wheelScene = new THREE.Scene();
-    wheelScene.background = new THREE.Color(0xdce0e6);
+    wheelScene.background = new THREE.Color(0x07060b);
 
     wheelRenderer = new THREE.WebGLRenderer({ antialias: true });
     wheelRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -1808,8 +1811,15 @@ function buildWheel() {
 
   // Restore genre scroll position or start at 0
   var savedAngle = genreScrollMemory[curTier];
-  wheelGroup.rotation.x = (savedAngle !== undefined) ? savedAngle : 0;
-  wheelVelocity = 0;
+  if (savedAngle !== undefined) {
+    wheelGroup.rotation.x = savedAngle;
+    currentTileIdx = Math.round(savedAngle / WHEEL_ANGLE_STEP);
+  } else {
+    wheelGroup.rotation.x = 0;
+    currentTileIdx = 0;
+  }
+  targetRotation = currentTileIdx * WHEEL_ANGLE_STEP;
+  isAnimating = false;
 
   wheelScene.add(wheelGroup);
   updateCounter();
@@ -1846,9 +1856,8 @@ function getCenterIdx() {
 }
 
 function updateCounter() {
-  var ci = getCenterIdx();
-  idx = ci;
-  document.getElementById('counter').textContent = WHEEL_NUM ? (ci + 1) + ' / ' + WHEEL_NUM : '0';
+  idx = currentTileIdx;
+  document.getElementById('counter').textContent = WHEEL_NUM ? (currentTileIdx + 1) + ' / ' + WHEEL_NUM : '0';
 }
 
 // === FLIP CENTER TILE — horizontal card flip with GSAP ===
@@ -1911,107 +1920,101 @@ function flipCenterTile() {
   });
 }
 
-// === ANIMATION LOOP — verbatim from prototype ===
+// === SNAP NAVIGATION ===
+function snapToTile(newIdx) {
+  if (!wheelGroup || !WHEEL_NUM || isAnimating) return;
+  // Wrap index
+  newIdx = ((newIdx % WHEEL_NUM) + WHEEL_NUM) % WHEEL_NUM;
+  currentTileIdx = newIdx;
+  targetRotation = newIdx * WHEEL_ANGLE_STEP;
+  isAnimating = true;
+  gsap.to(wheelGroup.rotation, {
+    x: targetRotation,
+    duration: 0.4,
+    ease: 'power2.out',
+    onComplete: function() {
+      isAnimating = false;
+    }
+  });
+  playSound('click');
+}
+
+// === ANIMATION LOOP — render only, no velocity ===
 function wheelAnimate() {
   wheelAnimId = requestAnimationFrame(wheelAnimate);
   if (!wheelGroup) return;
-
-  if (!wheelDragging && !wheelFlipping) {
-    wheelVelocity *= FRICTION;
-    if (Math.abs(wheelVelocity) < 0.00003) wheelVelocity = 0;
-    wheelGroup.rotation.x += wheelVelocity;
-  }
   updateWheelOpacity();
   updateCounter();
   wheelRenderer.render(wheelScene, wheelCamera);
 }
 
-// === DRAG HANDLING — verbatim from prototype ===
+// === SWIPE / TAP HANDLING — snap navigation ===
 var mountEl = document.getElementById('carouselArea');
 
 mountEl.addEventListener('mousedown', function(e) {
   e.preventDefault();
-  if (wheelFlipping) return;
+  if (wheelFlipping || isAnimating) return;
   wheelDragging = true;
-  wheelLastY = e.clientY;
-  wheelLastX = e.clientX;
   wheelDragStartY = e.clientY;
   wheelDragStartX = e.clientX;
   wheelLastTime = performance.now();
-  wheelVelocity = 0;
-});
-window.addEventListener('mousemove', function(e) {
-  if (!wheelDragging || !wheelGroup) return;
-  var now = performance.now();
-  var dt = now - wheelLastTime || 16;
-  var dy = e.clientY - wheelLastY;
-  wheelVelocity = (dy / dt) * 16 * 0.0025;
-  wheelGroup.rotation.x += wheelVelocity;
-  wheelLastY = e.clientY;
-  wheelLastX = e.clientX;
-  wheelLastTime = now;
 });
 window.addEventListener('mouseup', function(e) {
   if (!wheelDragging) return;
   wheelDragging = false;
-  // Check for horizontal swipe action
   var dx = e.clientX - wheelDragStartX;
   var dy = e.clientY - wheelDragStartY;
-  if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 60) {
-    wheelVelocity = 0;
+  // Horizontal swipe actions
+  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
     if (dx > 0) swipeAction('watched');
     else swipeAction('dnf');
+    return;
   }
-  // Check for tap (minimal movement)
-  if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
+  // Vertical swipe — snap to next/prev tile
+  if (dy > 50) { snapToTile(currentTileIdx + 1); return; }
+  if (dy < -50) { snapToTile(currentTileIdx - 1); return; }
+  // Tap — flip center tile
+  if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
     flipCenterTile();
   }
 });
 
 mountEl.addEventListener('touchstart', function(e) {
-  if (wheelFlipping) return;
+  if (wheelFlipping || isAnimating) return;
   wheelDragging = true;
-  wheelLastY = e.touches[0].clientY;
-  wheelLastX = e.touches[0].clientX;
   wheelDragStartY = e.touches[0].clientY;
   wheelDragStartX = e.touches[0].clientX;
   wheelLastTime = performance.now();
-  wheelVelocity = 0;
 });
 mountEl.addEventListener('touchmove', function(e) {
   e.preventDefault();
-  if (!wheelDragging || !wheelGroup) return;
-  var now = performance.now();
-  var dt = now - wheelLastTime || 16;
-  var dy = e.touches[0].clientY - wheelLastY;
-  wheelVelocity = (dy / dt) * 16 * 0.0025;
-  wheelGroup.rotation.x += wheelVelocity;
-  wheelLastY = e.touches[0].clientY;
-  wheelLastX = e.touches[0].clientX;
-  wheelLastTime = now;
 }, { passive: false });
 mountEl.addEventListener('touchend', function(e) {
   if (!wheelDragging) return;
   wheelDragging = false;
   var dx = e.changedTouches[0].clientX - wheelDragStartX;
   var dy = e.changedTouches[0].clientY - wheelDragStartY;
-  if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 60) {
-    wheelVelocity = 0;
+  // Horizontal swipe actions
+  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
     if (dx > 0) swipeAction('watched');
     else swipeAction('dnf');
+    return;
   }
-  if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
+  // Vertical swipe — snap to next/prev tile
+  if (dy > 50) { snapToTile(currentTileIdx + 1); return; }
+  if (dy < -50) { snapToTile(currentTileIdx - 1); return; }
+  // Tap — flip center tile
+  if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
     flipCenterTile();
   }
 });
 
-// Wheel scroll — verbatim from prototype
+// Wheel scroll — snap one tile per event
 mountEl.addEventListener('wheel', function(e) {
   e.preventDefault();
-  if (!wheelGroup) return;
-  var impulse = e.deltaY * 0.0008;
-  wheelVelocity += impulse;
-  wheelGroup.rotation.x += impulse;
+  if (!wheelGroup || isAnimating) return;
+  if (e.deltaY > 0) snapToTile(currentTileIdx + 1);
+  else if (e.deltaY < 0) snapToTile(currentTileIdx - 1);
 }, { passive: false });
 
 document.addEventListener('wheel', function(e) {
@@ -2021,17 +2024,30 @@ document.addEventListener('wheel', function(e) {
 
 // Keyboard
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'ArrowUp') { e.preventDefault(); if (wheelGroup) { wheelVelocity = -0.04; } }
-  else if (e.key === 'ArrowDown') { e.preventDefault(); if (wheelGroup) { wheelVelocity = 0.04; } }
+  if (e.key === 'ArrowUp') { e.preventDefault(); snapToTile(currentTileIdx - 1); }
+  else if (e.key === 'ArrowDown') { e.preventDefault(); snapToTile(currentTileIdx + 1); }
   else if (e.key === 'ArrowRight') swipeAction('watched');
   else if (e.key === 'ArrowLeft') swipeAction('dnf');
   else if (e.key === ' ') { e.preventDefault(); flipCenterTile(); }
 });
 
-// Slot shuffle — spin the wheel fast then decelerate
+// Slot shuffle — jump to a random tile with snap
 function slotShuffle() {
   if (!wheelGroup || !WHEEL_NUM) return;
-  wheelVelocity = 0.12 + Math.random() * 0.06;
+  var randomIdx = Math.floor(Math.random() * WHEEL_NUM);
+  // Ensure we pick a different tile
+  if (randomIdx === currentTileIdx && WHEEL_NUM > 1) {
+    randomIdx = (randomIdx + 1) % WHEEL_NUM;
+  }
+  isAnimating = true;
+  currentTileIdx = randomIdx;
+  targetRotation = randomIdx * WHEEL_ANGLE_STEP;
+  gsap.to(wheelGroup.rotation, {
+    x: targetRotation,
+    duration: 0.8,
+    ease: 'power2.inOut',
+    onComplete: function() { isAnimating = false; }
+  });
   playSound('slot');
 }
 
