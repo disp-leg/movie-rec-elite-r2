@@ -1552,24 +1552,25 @@ function positionCard(tile, offset, dragProgress) {
   var absOff = Math.abs(offset - dragProgress);
   var sign = offset - dragProgress > 0 ? 1 : (offset - dragProgress < 0 ? -1 : 0);
 
-  // Scale: center=1, each step shrinks significantly
-  var scale = Math.max(0.6, 1 - absOff * 0.1);
-  // Z depth: center=0, each step recedes deeply
-  var z = -absOff * 80;
-  // Y offset: cards peek from below/above
-  var y = (offset - dragProgress) * 40;
-  // Opacity: center=1, rapid fade
-  var opacity = Math.max(0, 1 - absOff * 0.4);
-  // Blur for depth
-  var blur = Math.min(absOff * 2.5, 6);
-  // Z-index: center highest
-  var zIdx = 100 - Math.round(absOff * 10);
-
-  tile.style.transform = 'translateY(' + y + 'px) translateZ(' + z + 'px) scale(' + scale + ')';
-  tile.style.opacity = opacity;
-  tile.style.filter = absOff < 0.3 ? 'blur(0px)' : 'blur(' + blur + 'px)';
-  tile.style.zIndex = zIdx;
-  tile.style.pointerEvents = absOff < 0.5 ? '' : 'none';
+  // Only center card visible — all others hidden
+  if (absOff < 0.3) {
+    // Center card
+    tile.style.transform = 'translateY(0) translateZ(0) scale(1)';
+    tile.style.opacity = 1;
+    tile.style.filter = 'blur(0px)';
+    tile.style.zIndex = 100;
+    tile.style.pointerEvents = '';
+    tile.style.display = '';
+  } else {
+    // Non-center: hidden, but positioned for transition
+    var sign = offset - dragProgress > 0 ? 1 : -1;
+    tile.style.transform = 'translateY(' + (sign * 60) + 'px) translateZ(-100px) scale(0.92)';
+    tile.style.opacity = 0;
+    tile.style.filter = 'blur(0px)';
+    tile.style.zIndex = 50;
+    tile.style.pointerEvents = 'none';
+    tile.style.display = 'none';
+  }
 }
 
 function updateCounter() {
@@ -1580,20 +1581,35 @@ function navigate(dir) {
   if (isAnimating || !filtered.length) return;
   isAnimating = true;
 
-  idx = ((idx + dir) % filtered.length + filtered.length) % filtered.length;
+  // Fade out current center card
+  var currentCenter = carousel.querySelector('.tile[data-stack-offset="0"]');
+  if (currentCenter) {
+    currentCenter.style.transition = 'transform 0.35s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.25s ease';
+    currentCenter.style.transform = 'translateY(' + (dir * -50) + 'px) scale(0.95)';
+    currentCenter.style.opacity = 0;
+  }
 
-  // Animate current cards shifting
-  var cards = carousel.querySelectorAll('.tile');
-  cards.forEach(function(card) {
-    var offset = parseInt(card.dataset.stackOffset);
-    positionCard(card, offset - dir, 0);
-  });
-
-  // Rebuild after transition settles
+  // After fade out, rebuild with new index and fade in
   setTimeout(function() {
+    idx = ((idx + dir) % filtered.length + filtered.length) % filtered.length;
     buildStack();
-    isAnimating = false;
-  }, 450);
+
+    // Fade in new center
+    var newCenter = carousel.querySelector('.tile[data-stack-offset="0"]');
+    if (newCenter) {
+      newCenter.style.transition = 'none';
+      newCenter.style.transform = 'translateY(' + (dir * 40) + 'px) scale(0.95)';
+      newCenter.style.opacity = 0;
+      newCenter.style.display = '';
+      // Force reflow
+      newCenter.offsetHeight;
+      newCenter.style.transition = 'transform 0.4s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.3s ease';
+      newCenter.style.transform = 'translateY(0) translateZ(0) scale(1)';
+      newCenter.style.opacity = 1;
+    }
+
+    setTimeout(function() { isAnimating = false; }, 350);
+  }, 250);
 }
 
 // Slot-machine shuffle
