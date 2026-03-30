@@ -241,7 +241,7 @@ tiers.forEach(function(t) {
 
 function filterAndRebuild() {
   // Save current scroll position
-  if (prevTier && group) genreScrollMemory[prevTier] = currentTileIdx;
+  if (prevTier && group) genreScrollMemory[prevTier] = listIdx;
   prevTier = curTier;
   filtered = curTier === 'all' ? movies.slice() : movies.filter(function(m) { return m.tier === curTier; });
   rebuildWheel();
@@ -259,8 +259,10 @@ var CANVAS_W = Math.round(PLANE_W * TEXTURE_SCALE);
 var CANVAS_H = Math.round(PLANE_H * TEXTURE_SCALE);
 
 var group, meshes, renderer, scene, camera;
-var NUM_TILES, ANGLE_STEP, RADIUS, FOV;
-var currentTileIdx = 0;
+var WHEEL_SLOTS = 9; // ALWAYS 9 tiles on wheel — matches v2 prototype curvature
+var NUM_TILES = WHEEL_SLOTS;
+var ANGLE_STEP, RADIUS, FOV;
+var listIdx = 0; // position in the full filtered list (0-based)
 var isAnimating = false;
 var isFlipping = false;
 
@@ -392,7 +394,7 @@ function createBackTexture(movie) {
   return new THREE.CanvasTexture(canvas);
 }
 
-// === BUILD / REBUILD WHEEL ===
+// === BUILD / REBUILD WHEEL — ALWAYS 9 SLOTS ===
 function rebuildWheel() {
   var mount = document.getElementById('mount');
 
@@ -420,8 +422,8 @@ function rebuildWheel() {
 
   if (!filtered.length) { scene.add(group); updateCounter(); return; }
 
-  // === DERIVED VALUES (verbatim from v2 prototype) ===
-  NUM_TILES = filtered.length;
+  // === DERIVED VALUES — ALWAYS 9 SLOTS (verbatim from v2 prototype) ===
+  NUM_TILES = WHEEL_SLOTS;
   ANGLE_STEP = (Math.PI * 2) / NUM_TILES;
   var gapRad = ARC_GAP_DEG * Math.PI / 180;
   RADIUS = Math.round((PLANE_H / 2) / Math.sin((ANGLE_STEP - gapRad) / 2));
@@ -432,32 +434,66 @@ function rebuildWheel() {
   camera.position.set(0, 0, 0);
   camera.lookAt(0, 0, -RADIUS);
 
-  // === BUILD TILES (geometry verbatim from v2) ===
-  filtered.forEach(function(movie, i) {
+  // === BUILD 9 TILE SLOTS (geometry verbatim from v2) ===
+  for (var i = 0; i < NUM_TILES; i++) {
     var geo = new THREE.PlaneGeometry(PLANE_W, PLANE_H);
     var mat = new THREE.MeshBasicMaterial({ color: 0x111118, side: THREE.DoubleSide, transparent: true, opacity: 1.0 });
     var mesh = new THREE.Mesh(geo, mat);
-    // Position on cylinder (verbatim)
+    // Position on cylinder (verbatim from v2)
     mesh.position.set(0, Math.sin(i * ANGLE_STEP) * RADIUS, -Math.cos(i * ANGLE_STEP) * RADIUS);
     mesh.rotation.x = i * ANGLE_STEP;
-    mesh.userData = { idx: i, flipped: false, frontTex: null, backTex: null };
+    mesh.userData = { slotIdx: i, flipped: false, frontTex: null, backTex: null, movieIdx: -1 };
     group.add(mesh);
     meshes.push(mesh);
-    // Load poster async
-    createPosterTexture(movie, function(tex) {
-      mesh.userData.frontTex = tex;
-      mat.map = tex; mat.color.set(0xffffff); mat.needsUpdate = true;
-    });
-  });
+  }
 
   // Restore genre scroll position
   var saved = genreScrollMemory[curTier];
-  currentTileIdx = (saved !== undefined) ? saved : 0;
-  group.rotation.x = currentTileIdx * ANGLE_STEP;
+  listIdx = (saved !== undefined) ? saved : 0;
+
+  // Load textures for initial window
+  loadWindowTextures();
+
+  // Wheel always starts at rotation 0 (slot 0 = center)
+  group.rotation.x = 0;
 
   scene.add(group);
   isAnimating = false; isFlipping = false;
   updateCounter();
+}
+
+// === SLIDING WINDOW — map filtered list onto 9 wheel slots ===
+function getWindowMovie(slotOffset) {
+  // slotOffset: 0=center, 1=next, -1=prev, etc.
+  // Maps to filtered list with wrapping
+  var fi = ((listIdx + slotOffset) % filtered.length + filtered.length) % filtered.length;
+  return { movie: filtered[fi], filteredIdx: fi };
+}
+
+function loadWindowTextures() {
+  if (!filtered.length) return;
+  // Slot 0 = center movie (listIdx)
+  // Slot 1 = listIdx+1, Slot 2 = listIdx+2, ...
+  // Slot 8 = listIdx-1 (wraps around the 9-slot ring)
+  var half = Math.floor(NUM_TILES / 2);
+  for (var i = 0; i < NUM_TILES; i++) {
+    var offset = i <= half ? i : i - NUM_TILES; // 0,1,2,3,4,-4,-3,-2,-1
+    var w = getWindowMovie(offset);
+    var mesh = meshes[i];
+    mesh.userData.movieIdx = w.filteredIdx;
+    mesh.userData.flipped = false;
+    mesh.userData.backTex = null;
+    mesh.rotation.y = 0;
+    // Load poster
+    (function(m, movie) {
+      createPosterTexture(movie, function(tex) {
+        m.userData.frontTex = tex;
+        m.material.map = tex;
+        m.material.color.set(0xffffff);
+        m.material.needsUpdate = true;
+      });
+    })(mesh, w.movie);
+  }
 }
 
 // === OPACITY FALLOFF (verbatim from v2) ===
@@ -474,48 +510,56 @@ function updateOpacity() {
 }
 
 function updateCounter() {
-  idx = currentTileIdx;
-  document.getElementById('counter').textContent = filtered.length ? (currentTileIdx + 1) + ' / ' + filtered.length : '0';
+  idx = listIdx;
+  document.getElementById('counter').textContent = filtered.length ? (listIdx + 1) + ' / ' + filtered.length : '0';
 }
 
-// === SNAP NAVIGATION — one swipe = one tile, 400ms ===
-function snapToTile(newIdx) {
+// === SNAP NAVIGATION — rotate one slot, then shift window ===
+function navigateWheel(dir) {
+  // dir: +1 = next (swipe up), -1 = prev (swipe down)
   if (isAnimating || !filtered.length) return;
   isAnimating = true;
-  // Wrap
-  newIdx = ((newIdx % NUM_TILES) + NUM_TILES) % NUM_TILES;
-  // If flipped, flip back first
-  var centerMesh = meshes[currentTileIdx];
+
+  // If center is flipped, flip back instantly
+  var centerMesh = meshes[0];
   if (centerMesh && centerMesh.userData.flipped) {
     centerMesh.userData.flipped = false;
     if (centerMesh.userData.frontTex) { centerMesh.material.map = centerMesh.userData.frontTex; centerMesh.material.needsUpdate = true; }
     centerMesh.rotation.y = 0;
   }
-  currentTileIdx = newIdx;
-  var targetRot = newIdx * ANGLE_STEP;
-  // Find shortest path
-  var currentRot = group.rotation.x;
-  var diff = targetRot - (currentRot % (Math.PI * 2));
-  if (diff > Math.PI) diff -= Math.PI * 2;
-  if (diff < -Math.PI) diff += Math.PI * 2;
+
+  // Animate one ANGLE_STEP rotation
+  var targetRot = group.rotation.x + dir * ANGLE_STEP;
+
   gsap.to(group.rotation, {
-    x: currentRot + diff,
+    x: targetRot,
     duration: 0.4,
     ease: 'power2.out',
-    onComplete: function() { isAnimating = false; updateCounter(); }
+    onComplete: function() {
+      // Shift the list position
+      listIdx = ((listIdx + dir) % filtered.length + filtered.length) % filtered.length;
+      // Reset wheel to 0 and reload textures for new window
+      group.rotation.x = 0;
+      loadWindowTextures();
+      isAnimating = false;
+      updateCounter();
+    }
   });
-  updateCounter();
+
+  // Optimistic counter update
+  var nextIdx = ((listIdx + dir) % filtered.length + filtered.length) % filtered.length;
+  document.getElementById('counter').textContent = (nextIdx + 1) + ' / ' + filtered.length;
 }
 
-// === FLIP CENTER TILE ===
+// === FLIP CENTER TILE (always slot 0) ===
 function flipCenterTile() {
   if (isFlipping || isAnimating) return;
-  var mesh = meshes[currentTileIdx];
+  var mesh = meshes[0]; // slot 0 = center
   if (!mesh) return;
   isFlipping = true;
   var wasFlipped = mesh.userData.flipped;
   if (!wasFlipped && !mesh.userData.backTex) {
-    mesh.userData.backTex = createBackTexture(filtered[currentTileIdx]);
+    mesh.userData.backTex = createBackTexture(filtered[listIdx]);
   }
   var midDone = false;
   gsap.to(mesh.rotation, {
@@ -562,7 +606,7 @@ function onPointerUp(x, y) {
     return;
   }
   // Vertical swipe = navigate
-  if (ady > 40) { snapToTile(currentTileIdx + (dy > 0 ? 1 : -1)); }
+  if (ady > 40) { navigateWheel(dy > 0 ? 1 : -1); }
 }
 
 mount.addEventListener('mousedown', function(e) { e.preventDefault(); onPointerDown(e.clientX, e.clientY); });
@@ -577,15 +621,15 @@ mount.addEventListener('wheel', function(e) {
   if (wheelLock) return;
   if (Math.abs(e.deltaY) > 15) {
     wheelLock = true;
-    snapToTile(currentTileIdx + (e.deltaY > 0 ? 1 : -1));
+    navigateWheel(e.deltaY > 0 ? 1 : -1);
     setTimeout(function() { wheelLock = false; }, 450);
   }
 }, {passive:false});
 
 // Keyboard
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'ArrowUp') { e.preventDefault(); snapToTile(currentTileIdx - 1); }
-  else if (e.key === 'ArrowDown') { e.preventDefault(); snapToTile(currentTileIdx + 1); }
+  if (e.key === 'ArrowUp') { e.preventDefault(); navigateWheel(-1); }
+  else if (e.key === 'ArrowDown') { e.preventDefault(); navigateWheel(1); }
   else if (e.key === 'ArrowRight') swipeAction('watched');
   else if (e.key === 'ArrowLeft') swipeAction('dnf');
   else if (e.key === ' ') { e.preventDefault(); flipCenterTile(); }
@@ -605,7 +649,7 @@ function showToast(icon, text) {
 // === SWIPE ACTIONS ===
 function swipeAction(action) {
   if (isAnimating || !filtered.length) return;
-  var m = filtered[currentTileIdx];
+  var m = filtered[listIdx];
   if (!m) return;
   var icon='', label='', list=null;
   if (action==='watched') { icon='\u2713'; label='Watched'; list=historyArr; }
@@ -615,29 +659,33 @@ function swipeAction(action) {
   showToast(icon, label);
   if (action==='dnf') {
     filtered = filtered.filter(function(f){return f.id!==m.id;});
-    if (currentTileIdx >= filtered.length) currentTileIdx = 0;
+    if (listIdx >= filtered.length) listIdx = 0;
     rebuildWheel();
   } else {
-    snapToTile(currentTileIdx + 1);
+    navigateWheel(1);
   }
 }
 
-// === SHUFFLE ===
+// === SHUFFLE — spin wheel fast, land on random movie ===
 document.getElementById('shuffleBtn').addEventListener('click', function() {
-  if (!filtered.length) return;
-  var target = Math.floor(Math.random() * filtered.length);
-  // Spin several full rotations + land on target
+  if (!filtered.length || isAnimating) return;
   isAnimating = true;
-  var fullSpins = 2 + Math.floor(Math.random()*2);
-  var targetRot = target * ANGLE_STEP + fullSpins * Math.PI * 2;
-  currentTileIdx = target;
+  var target = Math.floor(Math.random() * filtered.length);
+  // Spin 2-3 full rotations for visual effect
+  var spins = 2 + Math.floor(Math.random() * 2);
+  var totalSteps = spins * NUM_TILES;
   gsap.to(group.rotation, {
-    x: targetRot,
+    x: group.rotation.x + totalSteps * ANGLE_STEP,
     duration: 1.2,
     ease: 'power2.inOut',
-    onComplete: function() { isAnimating = false; updateCounter(); }
+    onComplete: function() {
+      listIdx = target;
+      group.rotation.x = 0;
+      loadWindowTextures();
+      isAnimating = false;
+      updateCounter();
+    }
   });
-  updateCounter();
 });
 
 // === INTRO ===
