@@ -266,6 +266,7 @@ html {
   max-width: 330px;
   aspect-ratio: 2/3;
   transform-style: preserve-3d;
+  transition: transform 0.6s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 /* Fade edges of carousel area */
@@ -274,7 +275,7 @@ html {
   content: '';
   position: absolute;
   left: 0; right: 0;
-  height: 80px;
+  height: 120px;
   z-index: 2;
   pointer-events: none;
 }
@@ -1379,11 +1380,11 @@ const sceneEl = document.getElementById('carouselArea');
 let SLICE = 0, RADIUS = 0;
 let currentAngle = 0, targetAngle = 0;
 let cylVelocity = 0;
-let isAutoRotating = false, isDragging = false, hoverPaused = false;
+let isAutoRotating = true, isDragging = false, hoverPaused = false;
 let dragStartY = 0, dragStartAngle = 0, lastDragY = 0, lastDragTime = 0;
 let idleTimer = null;
 const TILE_HEIGHT = 440;
-const TILE_GAP = 40;
+const TILE_GAP = 30;
 
 function buildCylinder() {
   cylinderEl.textContent = '';
@@ -1451,7 +1452,7 @@ function nav(dir) {
 }
 
 function animateCylinder() {
-  if (isAutoRotating && !hoverPaused && !isDragging) targetAngle += 0.08;
+  if (isAutoRotating && !hoverPaused && !isDragging) targetAngle += 0.15;
   if (!isDragging && Math.abs(cylVelocity) > 0.01) {
     targetAngle += cylVelocity; cylVelocity *= 0.95;
   } else if (!isDragging) cylVelocity = 0;
@@ -1463,7 +1464,7 @@ function animateCylinder() {
 
 function resetIdleTimer() {
   clearTimeout(idleTimer);
-  idleTimer = setTimeout(() => { isAutoRotating = true; cylVelocity = 0; }, 4000);
+  idleTimer = setTimeout(() => { isAutoRotating = true; cylVelocity = 0; }, 3000);
 }
 
 function slotShuffle() {
@@ -1616,6 +1617,7 @@ area.addEventListener('touchstart', e => {
   const y = e.touches[0].clientY;
   tsx = e.touches[0].clientX; tsy = y; tst = Date.now();
   isDragging = true; isAutoRotating = false; cylVelocity = 0;
+  cylinderEl.style.transition = 'none';
   dragStartY = y; lastDragY = y; lastDragTime = Date.now();
   dragStartAngle = targetAngle;
   longPressTimer = setTimeout(() => { longPressTimer = null; isDragging = false; swipeAction('save'); }, 500);
@@ -1641,6 +1643,7 @@ area.addEventListener('touchend', e => {
   if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
   const wasDragging = isDragging;
   isDragging = false;
+  cylinderEl.style.transition = '';
   if (!wasDragging) return;
   const dx = e.changedTouches[0].clientX - tsx;
   const dy = tsy - e.changedTouches[0].clientY;
@@ -1662,6 +1665,7 @@ area.addEventListener('touchend', e => {
 let mdn = false, msx = 0, msy = 0;
 area.addEventListener('mousedown', e => {
   mdn = true; isDragging = true; isAutoRotating = false; cylVelocity = 0;
+  cylinderEl.style.transition = 'none';
   msx = e.clientX; msy = e.clientY;
   dragStartY = e.clientY; lastDragY = e.clientY; lastDragTime = Date.now();
   dragStartAngle = targetAngle;
@@ -1675,7 +1679,7 @@ window.addEventListener('mousemove', e => {
   lastDragY = y; lastDragTime = now;
 });
 window.addEventListener('mouseup', e => {
-  if (!mdn) return; mdn = false; isDragging = false;
+  if (!mdn) return; mdn = false; isDragging = false; cylinderEl.style.transition = '';
   const dx = e.clientX - msx, dy = msy - e.clientY;
   if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 60) {
     cylVelocity = 0; targetAngle = dragStartAngle;
