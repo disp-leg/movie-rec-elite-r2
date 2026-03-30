@@ -1548,28 +1548,21 @@ function buildStack() {
   updateCounter();
 }
 
-function positionCard(tile, offset, dragProgress) {
-  var absOff = Math.abs(offset - dragProgress);
-  var sign = offset - dragProgress > 0 ? 1 : (offset - dragProgress < 0 ? -1 : 0);
-
-  // Only center card visible — all others hidden
-  if (absOff < 0.3) {
-    // Center card
-    tile.style.transform = 'translateY(0) translateZ(0) scale(1)';
+// Position a card: center visible, others staged off-screen for transitions
+function positionCard(tile, offset) {
+  if (Math.abs(offset) < 0.01) {
+    tile.style.transform = 'translateY(0) scale(1)';
     tile.style.opacity = 1;
-    tile.style.filter = 'blur(0px)';
     tile.style.zIndex = 100;
     tile.style.pointerEvents = '';
     tile.style.display = '';
   } else {
-    // Non-center: hidden, but positioned for transition
-    var sign = offset - dragProgress > 0 ? 1 : -1;
-    tile.style.transform = 'translateY(' + (sign * 60) + 'px) translateZ(-100px) scale(0.92)';
+    var sign = offset > 0 ? 1 : -1;
+    tile.style.transform = 'translateY(' + (sign * 110) + '%) scale(0.88)';
     tile.style.opacity = 0;
-    tile.style.filter = 'blur(0px)';
     tile.style.zIndex = 50;
     tile.style.pointerEvents = 'none';
-    tile.style.display = 'none';
+    tile.style.display = '';
   }
 }
 
@@ -1577,39 +1570,102 @@ function updateCounter() {
   document.getElementById('counter').textContent = filtered.length ? (idx + 1) + ' / ' + filtered.length : '0';
 }
 
-function navigate(dir) {
-  if (isAnimating || !filtered.length) return;
+// ============================================
+// LIVE DRAG + MOMENTUM — like cylinder-carousel.html
+// Card follows finger, velocity tracked, spring release
+// ============================================
+var dragY = 0;
+var lastY = 0;
+var lastTime = 0;
+var vel = 0;
+var cardH = 0;
+var SWIPE_THRESHOLD = 0.18; // fraction of card height
+var SPRING = 'cubic-bezier(0.23, 1, 0.32, 1)';
+
+function getCardHeight() {
+  var c = carousel.querySelector('.tile[data-stack-offset="0"]');
+  return c ? c.offsetHeight : 500;
+}
+
+// Animate the current card position during drag
+function applyDragOffset(dy) {
+  var center = carousel.querySelector('.tile[data-stack-offset="0"]');
+  if (!center) return;
+  // Rubber-band: card follows finger with slight resistance
+  var resist = 0.7;
+  var ty = dy * resist;
+  var progress = Math.abs(ty) / (cardH || 500);
+  var sc = 1 - progress * 0.06;
+  var op = 1 - progress * 0.3;
+  center.style.transition = 'none';
+  center.style.transform = 'translateY(' + ty + 'px) scale(' + Math.max(0.9, sc) + ')';
+  center.style.opacity = Math.max(0.3, op);
+
+  // Show the incoming card peeking
+  var dir = dy < 0 ? 1 : -1; // drag up = next (dir=1)
+  var incoming = carousel.querySelector('.tile[data-stack-offset="' + dir + '"]');
+  if (incoming) {
+    var inProgress = Math.min(1, Math.abs(progress) * 1.2);
+    var inY = dir * (1 - inProgress) * 110;
+    incoming.style.transition = 'none';
+    incoming.style.display = '';
+    incoming.style.transform = 'translateY(' + inY + '%) scale(' + (0.88 + inProgress * 0.12) + ')';
+    incoming.style.opacity = inProgress * 0.8;
+    incoming.style.zIndex = 90;
+  }
+}
+
+function commitNavigation(dir, releaseVelocity) {
+  if (isAnimating) return;
   isAnimating = true;
 
-  // Fade out current center card
-  var currentCenter = carousel.querySelector('.tile[data-stack-offset="0"]');
-  if (currentCenter) {
-    currentCenter.style.transition = 'transform 0.35s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.25s ease';
-    currentCenter.style.transform = 'translateY(' + (dir * -50) + 'px) scale(0.95)';
-    currentCenter.style.opacity = 0;
+  var oldCenter = carousel.querySelector('.tile[data-stack-offset="0"]');
+  var incoming = carousel.querySelector('.tile[data-stack-offset="' + dir + '"]');
+
+  // Animate old card out with momentum
+  var exitDur = Math.max(0.2, Math.min(0.45, 0.35 - Math.abs(releaseVelocity) * 0.0003));
+  if (oldCenter) {
+    oldCenter.style.transition = 'transform ' + exitDur + 's ' + SPRING + ', opacity ' + exitDur + 's ease';
+    oldCenter.style.transform = 'translateY(' + (dir * -120) + '%) scale(0.85)';
+    oldCenter.style.opacity = 0;
   }
 
-  // After fade out, rebuild with new index and fade in
+  // Animate new card in
+  if (incoming) {
+    incoming.style.display = '';
+    incoming.style.transition = 'transform 0.45s ' + SPRING + ', opacity 0.35s ease';
+    incoming.style.transform = 'translateY(0) scale(1)';
+    incoming.style.opacity = 1;
+    incoming.style.zIndex = 100;
+  }
+
   setTimeout(function() {
     idx = ((idx + dir) % filtered.length + filtered.length) % filtered.length;
     buildStack();
+    isAnimating = false;
+  }, 450);
+}
 
-    // Fade in new center
-    var newCenter = carousel.querySelector('.tile[data-stack-offset="0"]');
-    if (newCenter) {
-      newCenter.style.transition = 'none';
-      newCenter.style.transform = 'translateY(' + (dir * 40) + 'px) scale(0.95)';
-      newCenter.style.opacity = 0;
-      newCenter.style.display = '';
-      // Force reflow
-      newCenter.offsetHeight;
-      newCenter.style.transition = 'transform 0.4s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.3s ease';
-      newCenter.style.transform = 'translateY(0) translateZ(0) scale(1)';
-      newCenter.style.opacity = 1;
+function snapBack() {
+  // Return center card to rest
+  var center = carousel.querySelector('.tile[data-stack-offset="0"]');
+  if (center) {
+    center.style.transition = 'transform 0.4s ' + SPRING + ', opacity 0.3s ease';
+    center.style.transform = 'translateY(0) scale(1)';
+    center.style.opacity = 1;
+  }
+  // Hide peeking neighbors
+  var cards = carousel.querySelectorAll('.tile');
+  cards.forEach(function(c) {
+    if (c.dataset.stackOffset !== '0') {
+      c.style.transition = 'opacity 0.3s ease';
+      c.style.opacity = 0;
     }
+  });
+}
 
-    setTimeout(function() { isAnimating = false; }, 350);
-  }, 250);
+function navigate(dir) {
+  commitNavigation(dir, 0);
 }
 
 // Slot-machine shuffle
@@ -1626,75 +1682,137 @@ function slotShuffle() {
       playSound('click');
       return;
     }
-    idx = (idx + 1) % filtered.length;
-    buildStack();
-    playSound('slot');
-    step++;
+    var dir = 1;
+    var oldCenter = carousel.querySelector('.tile[data-stack-offset="0"]');
+    if (oldCenter) {
+      var dur = 0.08 + step * 0.02;
+      oldCenter.style.transition = 'transform ' + dur + 's ease-in, opacity ' + dur + 's ease';
+      oldCenter.style.transform = 'translateY(-100%) scale(0.9)';
+      oldCenter.style.opacity = 0;
+    }
     var delay = 60 + step * step * 8;
-    setTimeout(tick, delay);
+    setTimeout(function() {
+      idx = (idx + 1) % filtered.length;
+      buildStack();
+      playSound('slot');
+      step++;
+      tick();
+    }, delay);
   }
   tick();
 }
 
-// --- Gesture handling ---
+// ============================================
+// GESTURE HANDLING — finger-follow + momentum
+// ============================================
+
+// Touch
 scene.addEventListener('touchstart', function(e) {
   if (isAnimating) return;
   isDragging = true;
-  dragStartY = e.touches[0].clientY;
-  dragStartX = e.touches[0].clientX;
-  dragDelta = 0;
+  dragY = 0;
+  var touch = e.touches[0];
+  dragStartY = touch.clientY;
+  dragStartX = touch.clientX;
+  lastY = touch.clientY;
+  lastTime = Date.now();
+  vel = 0;
+  cardH = getCardHeight();
 }, { passive: true });
 
 scene.addEventListener('touchmove', function(e) {
   if (!isDragging) return;
-  dragDelta = dragStartY - e.touches[0].clientY;
+  var y = e.touches[0].clientY;
+  var now = Date.now();
+  var dt = now - lastTime;
+  if (dt > 0) vel = (lastY - y) / dt * 1000; // px/sec
+  lastY = y;
+  lastTime = now;
+  dragY = dragStartY - y;
+  applyDragOffset(-dragY);
 }, { passive: true });
 
 scene.addEventListener('touchend', function(e) {
   if (!isDragging) return;
   isDragging = false;
-  var dy = dragDelta;
+  var dy = dragY;
   var dx = e.changedTouches[0].clientX - dragStartX;
 
   // Horizontal swipe = action
   if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
+    snapBack();
     if (dx > 0) swipeAction('watched');
     else swipeAction('dnf');
+    return;
   }
-  // Vertical swipe = navigate
-  else if (Math.abs(dy) > 40) {
-    navigate(dy > 0 ? 1 : -1);
+
+  // Vertical: check threshold (distance OR velocity)
+  var fraction = Math.abs(dy) / (cardH || 500);
+  var fastFlick = Math.abs(vel) > 600;
+
+  if (fraction > SWIPE_THRESHOLD || fastFlick) {
+    var dir = dy > 0 ? 1 : -1;
+    commitNavigation(dir, vel);
+  } else {
+    snapBack();
   }
 }, { passive: true });
 
-// Mouse drag
-var mdn = false, msy = 0, msx = 0;
+// Mouse
 scene.addEventListener('mousedown', function(e) {
-  mdn = true; msy = e.clientY; msx = e.clientX;
+  if (isAnimating) return;
+  isDragging = true;
+  dragY = 0;
+  dragStartY = e.clientY;
+  dragStartX = e.clientX;
+  lastY = e.clientY;
+  lastTime = Date.now();
+  vel = 0;
+  cardH = getCardHeight();
   e.preventDefault();
 });
 window.addEventListener('mousemove', function(e) {
-  if (!mdn) return;
-  dragDelta = msy - e.clientY;
+  if (!isDragging) return;
+  var now = Date.now();
+  var dt = now - lastTime;
+  if (dt > 0) vel = (lastY - e.clientY) / dt * 1000;
+  lastY = e.clientY;
+  lastTime = now;
+  dragY = dragStartY - e.clientY;
+  applyDragOffset(-dragY);
 });
 window.addEventListener('mouseup', function(e) {
-  if (!mdn) return; mdn = false;
-  var dy = msy - e.clientY;
-  var dx = e.clientX - msx;
+  if (!isDragging) return;
+  isDragging = false;
+  var dy = dragY;
+  var dx = e.clientX - dragStartX;
+
   if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
+    snapBack();
     if (dx > 0) swipeAction('watched');
     else swipeAction('dnf');
-  } else if (Math.abs(dy) > 40) {
-    navigate(dy > 0 ? 1 : -1);
+    return;
+  }
+
+  var fraction = Math.abs(dy) / (cardH || 500);
+  var fastFlick = Math.abs(vel) > 600;
+
+  if (fraction > SWIPE_THRESHOLD || fastFlick) {
+    commitNavigation(dy > 0 ? 1 : -1, vel);
+  } else {
+    snapBack();
   }
 });
 
-// Scroll wheel
+// Scroll wheel — smooth single-card navigation
+var wheelLock = false;
 scene.addEventListener('wheel', function(e) {
   e.preventDefault();
-  if (isAnimating) return;
-  if (Math.abs(e.deltaY) > 20) {
+  if (isAnimating || wheelLock) return;
+  if (Math.abs(e.deltaY) > 15) {
+    wheelLock = true;
     navigate(e.deltaY > 0 ? 1 : -1);
+    setTimeout(function() { wheelLock = false; }, 500);
   }
 }, { passive: false });
 document.addEventListener('wheel', function(e) {
@@ -1715,10 +1833,6 @@ document.addEventListener('keydown', function(e) {
     if (center) center.click();
   }
 });
-
-// Hover pause (no auto-rotate for stack)
-scene.addEventListener('mouseenter', function() {});
-scene.addEventListener('mouseleave', function() {});
 
 // Shuffle button
 document.getElementById('shuffleBtn').addEventListener('click', function() {
