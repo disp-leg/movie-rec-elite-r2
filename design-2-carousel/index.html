@@ -280,43 +280,28 @@ html {
 }
 
 /* Carousel area — deep perspective for orbital motion */
+/* Three.js hamster wheel container */
 .carousel-area {
   flex: 1;
   position: relative;
   overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  perspective: 600px;
-  perspective-origin: 50% 50%;
+  cursor: grab;
 }
+.carousel-area:active { cursor: grabbing; }
+.carousel-area canvas { display: block; width: 100% !important; height: 100% !important; }
 
-/* Stack container — fills available space */
-.carousel {
-  position: relative;
-  width: 90vw;
-  max-width: 500px;
-  height: 75vh;
-  max-height: 750px;
-  transform-style: preserve-3d;
-}
-
-/* Individual tile — card in the stack */
-.tile {
+/* Vignette spotlight overlay */
+.wheel-vignette {
   position: absolute;
-  width: 100%;
-  height: 100%;
-  left: 0;
-  top: 0;
-  transform-style: preserve-3d;
-  cursor: pointer;
-  will-change: transform, opacity;
-  transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1),
-              opacity 0.4s ease,
-              filter 0.4s ease;
-  border-radius: var(--radius-lg);
-  overflow: hidden;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: radial-gradient(ellipse 80% 70% at 50% 50%, transparent 22%, rgba(220,224,230,0.5) 60%, rgba(220,224,230,0.92) 100%);
+  pointer-events: none;
+  z-index: 2;
 }
+
+/* Hidden — tiles are rendered to canvas, not DOM */
+.carousel { display: none; }
+.tile { display: none; }
 .tile.flipped .tile-inner {
   transform: rotateY(180deg);
 }
@@ -1125,6 +1110,7 @@ html {
   <!-- Carousel -->
   <div class="carousel-area" id="carouselArea">
     <div class="carousel" id="carousel"></div>
+    <div class="wheel-vignette"></div>
   </div>
 
   <!-- Carousel controls -->
@@ -1274,7 +1260,7 @@ tiers.forEach(t=>{
 function filterRender(){
   filtered = curTier === 'all' ? movies.slice() : movies.filter(m=>m.tier===curTier);
   idx=0;
-  buildStack();
+  buildWheel();
 }
 
 // Legacy renderTile for swipe actions (single tile mode)
@@ -1507,314 +1493,485 @@ function swipeAction(action) {
       if (action === 'dnf') {
         filtered = filtered.filter(function(f) { return f.id !== m.id; });
       }
-      buildStack();
+      buildWheel();
       anim = false;
     }
   });
 }
 
 // ============================================
-// CARD STACK CAROUSEL — depth-based stack with spring physics
-// Center card full size, neighbors recede behind with scale + translateZ
+// THREE.JS HAMSTER WHEEL — verbatim geometry from hamster-wheel-v2.html
 // ============================================
-var carousel = document.getElementById('carousel');
-var scene = document.getElementById('carouselArea');
-var VISIBLE_CARDS = 5;
-var isDragging = false;
-var dragStartY = 0;
-var dragStartX = 0;
-var dragDelta = 0;
-var isAnimating = false;
+var PLANE_W = 310;
+var PLANE_H = 440;
+var ARC_GAP_DEG = 1.96;
+var COVERAGE = 0.752;
+var TEXTURE_SCALE = 1.68;
+var CANVAS_W = Math.round(PLANE_W * TEXTURE_SCALE);
+var CANVAS_H = Math.round(PLANE_H * TEXTURE_SCALE);
+var FRICTION = 0.955;
 
-function buildStack() {
-  carousel.textContent = '';
-  if (!filtered.length) return;
-  idx = Math.min(idx, filtered.length - 1);
+var wheelGroup = null;
+var wheelMeshes = [];
+var wheelRenderer = null;
+var wheelCamera = null;
+var wheelScene = null;
+var wheelVelocity = 0;
+var wheelDragging = false;
+var wheelLastY = 0;
+var wheelLastTime = 0;
+var wheelLastX = 0;
+var wheelDragStartX = 0;
+var wheelDragStartY = 0;
+var WHEEL_RADIUS = 0;
+var WHEEL_ANGLE_STEP = 0;
+var WHEEL_NUM = 0;
+var wheelFlippedIdx = -1;
+var genreScrollMemory = {};
+var wheelAnimId = null;
 
-  // Build only visible cards (center + neighbors)
-  var half = Math.floor(VISIBLE_CARDS / 2);
-  for (var offset = -half; offset <= half; offset++) {
-    var mi = ((idx + offset) % filtered.length + filtered.length) % filtered.length;
-    var savedIdx = idx;
-    idx = mi;
-    var tile = renderTile(true);
-    idx = savedIdx;
-    if (tile) {
-      tile.dataset.stackOffset = offset;
-      tile.dataset.movieIdx = mi;
-      positionCard(tile, offset, 0);
-    }
-  }
-  updateCounter();
+// Canvas rounded-rect helper (verbatim from prototype)
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
 }
 
-// Position a card: center visible, others staged off-screen for transitions
-function positionCard(tile, offset) {
-  if (Math.abs(offset) < 0.01) {
-    tile.style.transform = 'translateY(0) scale(1)';
-    tile.style.opacity = 1;
-    tile.style.zIndex = 100;
-    tile.style.pointerEvents = '';
-    tile.style.display = '';
-  } else {
-    var sign = offset > 0 ? 1 : -1;
-    tile.style.transform = 'translateY(' + (sign * 110) + '%) scale(0.88)';
-    tile.style.opacity = 0;
-    tile.style.zIndex = 50;
-    tile.style.pointerEvents = 'none';
-    tile.style.display = '';
+// Create front-face texture: poster + overlay
+function createFrontTexture(movie, callback) {
+  var canvas = document.createElement('canvas');
+  canvas.width = CANVAS_W;
+  canvas.height = CANVAS_H;
+  var ctx = canvas.getContext('2d');
+  var cr = 24;
+
+  var img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = function() {
+    ctx.save();
+    roundRect(ctx, 0, 0, CANVAS_W, CANVAS_H, cr);
+    ctx.clip();
+
+    // Draw poster filling entire canvas
+    var aspect = img.width / img.height;
+    var cAspect = CANVAS_W / CANVAS_H;
+    var sw, sh, sx, sy;
+    if (aspect > cAspect) {
+      sh = img.height; sw = sh * cAspect;
+      sx = (img.width - sw) / 2; sy = 0;
+    } else {
+      sw = img.width; sh = sw / cAspect;
+      sx = 0; sy = (img.height - sh) / 2;
+    }
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, CANVAS_W, CANVAS_H);
+
+    // Bottom overlay: year + streaming dots
+    var overlayH = CANVAS_H * 0.14;
+    var grad = ctx.createLinearGradient(0, CANVAS_H - overlayH, 0, CANVAS_H);
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(0.4, 'rgba(0,0,0,0.5)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.75)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, CANVAS_H - overlayH, CANVAS_W, overlayH);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.font = '600 ' + Math.round(22 * TEXTURE_SCALE) + 'px sans-serif';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(String(movie.year), 20, CANVAS_H - 14);
+
+    // Streaming dots
+    var dotX = CANVAS_W - 20;
+    var dotColors = {Netflix:'#e50914',Shudder:'#a259ff',Tubi:'#fa382f',Hulu:'#1ce783',Max:'#002be7'};
+    var streams = movie.streaming || [];
+    for (var s = streams.length - 1; s >= 0; s--) {
+      ctx.beginPath();
+      ctx.arc(dotX, CANVAS_H - 24, 7, 0, Math.PI * 2);
+      ctx.fillStyle = dotColors[streams[s]] || '#888';
+      ctx.fill();
+      dotX -= 20;
+    }
+
+    // Inner border
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 2;
+    roundRect(ctx, 2, 2, CANVAS_W - 4, CANVAS_H - 4, cr - 1);
+    ctx.stroke();
+
+    ctx.restore();
+    callback(new THREE.CanvasTexture(canvas));
+  };
+  img.onerror = function() {
+    // Fallback dark gradient
+    ctx.save();
+    roundRect(ctx, 0, 0, CANVAS_W, CANVAS_H, cr);
+    ctx.clip();
+    var g = ctx.createLinearGradient(0, 0, 0, CANVAS_H);
+    g.addColorStop(0, '#2a2a3a');
+    g.addColorStop(1, '#0a0a1a');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold ' + Math.round(28 * TEXTURE_SCALE) + 'px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(movie.title, CANVAS_W / 2, CANVAS_H / 2);
+    ctx.restore();
+    callback(new THREE.CanvasTexture(canvas));
+  };
+  img.src = movie.poster;
+}
+
+// Create back-face texture: synopsis, rating, etc
+function createBackTexture(movie) {
+  var canvas = document.createElement('canvas');
+  canvas.width = CANVAS_W;
+  canvas.height = CANVAS_H;
+  var ctx = canvas.getContext('2d');
+  var cr = 24;
+
+  ctx.save();
+  roundRect(ctx, 0, 0, CANVAS_W, CANVAS_H, cr);
+  ctx.clip();
+
+  // Engraved surface background
+  var bg = ctx.createLinearGradient(0, 0, 0, CANVAS_H);
+  bg.addColorStop(0, '#f4f1ec');
+  bg.addColorStop(0.5, '#ece9e3');
+  bg.addColorStop(1, '#e5e2dc');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+  var pad = 28;
+  var yPos = pad + 10;
+  var maxW = CANVAS_W - pad * 2;
+
+  // Title
+  ctx.fillStyle = '#3a3530';
+  ctx.font = 'bold ' + Math.round(26 * TEXTURE_SCALE) + 'px sans-serif';
+  ctx.textBaseline = 'top';
+  ctx.fillText(movie.title, pad, yPos);
+  yPos += 50;
+
+  // Meta: year + runtime + rating
+  var rt = movie.runtime ? Math.floor(movie.runtime / 60) + 'h ' + (movie.runtime % 60) + 'm' : '';
+  ctx.fillStyle = '#7a756d';
+  ctx.font = Math.round(18 * TEXTURE_SCALE) + 'px sans-serif';
+  ctx.fillText(movie.year + (rt ? '  |  ' + rt : '') + '  |  ' + movie.rating + '/5', pad, yPos);
+  yPos += 40;
+
+  // Synopsis (word-wrap)
+  ctx.fillStyle = '#6b665e';
+  ctx.font = Math.round(17 * TEXTURE_SCALE) + 'px sans-serif';
+  var words = (movie.synopsis || '').split(' ');
+  var line = '';
+  var lineH = 30;
+  for (var w = 0; w < words.length && yPos < CANVAS_H - 180; w++) {
+    var test = line + words[w] + ' ';
+    if (ctx.measureText(test).width > maxW && line) {
+      ctx.fillText(line, pad, yPos);
+      yPos += lineH;
+      line = words[w] + ' ';
+    } else {
+      line = test;
+    }
   }
+  if (line) { ctx.fillText(line, pad, yPos); yPos += lineH + 10; }
+
+  // Quote
+  if (movie.q1 && yPos < CANVAS_H - 100) {
+    ctx.fillStyle = '#9a958d';
+    ctx.font = 'italic ' + Math.round(15 * TEXTURE_SCALE) + 'px sans-serif';
+    var qWords = movie.q1.substring(0, 120).split(' ');
+    line = '';
+    for (var q = 0; q < qWords.length && yPos < CANVAS_H - 60; q++) {
+      var qt = line + qWords[q] + ' ';
+      if (ctx.measureText(qt).width > maxW && line) {
+        ctx.fillText(line, pad, yPos);
+        yPos += 26;
+        line = qWords[q] + ' ';
+      } else {
+        line = qt;
+      }
+    }
+    if (line) ctx.fillText(line, pad, yPos);
+  }
+
+  // Streaming pills at bottom
+  ctx.fillStyle = '#a09a92';
+  ctx.font = 'bold ' + Math.round(14 * TEXTURE_SCALE) + 'px sans-serif';
+  ctx.fillText('STREAM', pad, CANVAS_H - 50);
+  ctx.font = Math.round(16 * TEXTURE_SCALE) + 'px sans-serif';
+  ctx.fillStyle = '#6b665e';
+  ctx.fillText((movie.streaming || []).join('  |  '), pad + 80, CANVAS_H - 50);
+
+  // Border
+  ctx.strokeStyle = 'rgba(0,0,0,0.04)';
+  ctx.lineWidth = 2;
+  roundRect(ctx, 2, 2, CANVAS_W - 4, CANVAS_H - 4, cr - 1);
+  ctx.stroke();
+
+  ctx.restore();
+  return new THREE.CanvasTexture(canvas);
+}
+
+// === BUILD THE WHEEL ===
+function buildWheel() {
+  var mountEl = document.getElementById('carouselArea');
+
+  // Save genre scroll position
+  if (wheelGroup && curTier) {
+    genreScrollMemory[curTier] = wheelGroup.rotation.x;
+  }
+
+  // Init Three.js on first call
+  if (!wheelRenderer) {
+    wheelScene = new THREE.Scene();
+    wheelScene.background = new THREE.Color(0xdce0e6);
+
+    wheelRenderer = new THREE.WebGLRenderer({ antialias: true });
+    wheelRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    wheelRenderer.setSize(mountEl.clientWidth, mountEl.clientHeight);
+    mountEl.insertBefore(wheelRenderer.domElement, mountEl.firstChild);
+
+    window.addEventListener('resize', function() {
+      if (!wheelCamera || !wheelRenderer) return;
+      wheelCamera.aspect = mountEl.clientWidth / mountEl.clientHeight;
+      wheelCamera.updateProjectionMatrix();
+      wheelRenderer.setSize(mountEl.clientWidth, mountEl.clientHeight);
+    });
+  }
+
+  // Remove old group
+  if (wheelGroup) {
+    wheelScene.remove(wheelGroup);
+    wheelMeshes.forEach(function(m) { m.geometry.dispose(); m.material.dispose(); });
+    wheelMeshes = [];
+  }
+
+  if (!filtered.length) return;
+
+  WHEEL_NUM = filtered.length;
+  WHEEL_ANGLE_STEP = (Math.PI * 2) / WHEEL_NUM;
+  var gapRad = ARC_GAP_DEG * Math.PI / 180;
+  WHEEL_RADIUS = Math.round((PLANE_H / 2) / Math.sin((WHEEL_ANGLE_STEP - gapRad) / 2));
+
+  var frontAngularH = 2 * Math.atan((PLANE_H / 2) / WHEEL_RADIUS) * (180 / Math.PI);
+  var fov = Math.round(frontAngularH / COVERAGE);
+
+  wheelCamera = new THREE.PerspectiveCamera(fov, mountEl.clientWidth / mountEl.clientHeight, 1, 5000);
+  wheelCamera.position.set(0, 0, 0);
+  wheelCamera.lookAt(0, 0, -WHEEL_RADIUS);
+
+  wheelGroup = new THREE.Group();
+  wheelFlippedIdx = -1;
+
+  // Build tiles — start with placeholder, load poster async
+  filtered.forEach(function(movie, i) {
+    var geo = new THREE.PlaneGeometry(PLANE_W, PLANE_H);
+    var mat = new THREE.MeshBasicMaterial({
+      color: 0x1a1a2a,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 1.0
+    });
+    var mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(
+      0,
+      Math.sin(i * WHEEL_ANGLE_STEP) * WHEEL_RADIUS,
+      -Math.cos(i * WHEEL_ANGLE_STEP) * WHEEL_RADIUS
+    );
+    mesh.rotation.x = i * WHEEL_ANGLE_STEP;
+    mesh.userData = { movieIdx: i, flipped: false, backTexture: null };
+    wheelGroup.add(mesh);
+    wheelMeshes.push(mesh);
+
+    // Load poster texture async
+    createFrontTexture(movie, function(tex) {
+      mat.map = tex;
+      mat.color.set(0xffffff);
+      mat.needsUpdate = true;
+    });
+  });
+
+  // Restore genre scroll position or start at 0
+  var savedAngle = genreScrollMemory[curTier];
+  wheelGroup.rotation.x = (savedAngle !== undefined) ? savedAngle : 0;
+  wheelVelocity = 0;
+
+  wheelScene.add(wheelGroup);
+  updateCounter();
+
+  // Start animation loop if not running
+  if (!wheelAnimId) wheelAnimate();
+}
+
+// === OPACITY FALLOFF — verbatim from prototype ===
+function updateWheelOpacity() {
+  var TWO_PI = Math.PI * 2;
+  for (var i = 0; i < WHEEL_NUM; i++) {
+    var a = (i * WHEEL_ANGLE_STEP + wheelGroup.rotation.x) % TWO_PI;
+    if (a < 0) a += TWO_PI;
+    var facing = Math.cos(a);
+    var t = Math.max(0, (facing + 1) / 2);
+    wheelMeshes[i].material.opacity = 0.03 + Math.pow(t, 2.2) * 0.97;
+  }
+}
+
+// === GET CENTER TILE INDEX ===
+function getCenterIdx() {
+  if (!WHEEL_NUM) return 0;
+  var TWO_PI = Math.PI * 2;
+  var bestIdx = 0;
+  var bestFacing = -2;
+  for (var i = 0; i < WHEEL_NUM; i++) {
+    var a = (i * WHEEL_ANGLE_STEP + wheelGroup.rotation.x) % TWO_PI;
+    if (a < 0) a += TWO_PI;
+    var facing = Math.cos(a);
+    if (facing > bestFacing) { bestFacing = facing; bestIdx = i; }
+  }
+  return bestIdx;
 }
 
 function updateCounter() {
-  document.getElementById('counter').textContent = filtered.length ? (idx + 1) + ' / ' + filtered.length : '0';
+  var ci = getCenterIdx();
+  idx = ci;
+  document.getElementById('counter').textContent = WHEEL_NUM ? (ci + 1) + ' / ' + WHEEL_NUM : '0';
 }
 
-// ============================================
-// LIVE DRAG + MOMENTUM — like cylinder-carousel.html
-// Card follows finger, velocity tracked, spring release
-// ============================================
-var dragY = 0;
-var lastY = 0;
-var lastTime = 0;
-var vel = 0;
-var cardH = 0;
-var SWIPE_THRESHOLD = 0.18; // fraction of card height
-var SPRING = 'cubic-bezier(0.23, 1, 0.32, 1)';
+// === FLIP CENTER TILE ===
+function flipCenterTile() {
+  var ci = getCenterIdx();
+  var mesh = wheelMeshes[ci];
+  if (!mesh) return;
+  playSound('flip');
 
-function getCardHeight() {
-  var c = carousel.querySelector('.tile[data-stack-offset="0"]');
-  return c ? c.offsetHeight : 500;
-}
-
-// Animate the current card position during drag
-function applyDragOffset(dy) {
-  var center = carousel.querySelector('.tile[data-stack-offset="0"]');
-  if (!center) return;
-  // Rubber-band: card follows finger with slight resistance
-  var resist = 0.7;
-  var ty = dy * resist;
-  var progress = Math.abs(ty) / (cardH || 500);
-  var sc = 1 - progress * 0.06;
-  var op = 1 - progress * 0.3;
-  center.style.transition = 'none';
-  center.style.transform = 'translateY(' + ty + 'px) scale(' + Math.max(0.9, sc) + ')';
-  center.style.opacity = Math.max(0.3, op);
-
-  // Show the incoming card peeking
-  var dir = dy < 0 ? 1 : -1; // drag up = next (dir=1)
-  var incoming = carousel.querySelector('.tile[data-stack-offset="' + dir + '"]');
-  if (incoming) {
-    var inProgress = Math.min(1, Math.abs(progress) * 1.2);
-    var inY = dir * (1 - inProgress) * 110;
-    incoming.style.transition = 'none';
-    incoming.style.display = '';
-    incoming.style.transform = 'translateY(' + inY + '%) scale(' + (0.88 + inProgress * 0.12) + ')';
-    incoming.style.opacity = inProgress * 0.8;
-    incoming.style.zIndex = 90;
-  }
-}
-
-function commitNavigation(dir, releaseVelocity) {
-  if (isAnimating) return;
-  isAnimating = true;
-
-  var oldCenter = carousel.querySelector('.tile[data-stack-offset="0"]');
-  var incoming = carousel.querySelector('.tile[data-stack-offset="' + dir + '"]');
-
-  // Animate old card out with momentum
-  var exitDur = Math.max(0.2, Math.min(0.45, 0.35 - Math.abs(releaseVelocity) * 0.0003));
-  if (oldCenter) {
-    oldCenter.style.transition = 'transform ' + exitDur + 's ' + SPRING + ', opacity ' + exitDur + 's ease';
-    oldCenter.style.transform = 'translateY(' + (dir * -120) + '%) scale(0.85)';
-    oldCenter.style.opacity = 0;
-  }
-
-  // Animate new card in
-  if (incoming) {
-    incoming.style.display = '';
-    incoming.style.transition = 'transform 0.45s ' + SPRING + ', opacity 0.35s ease';
-    incoming.style.transform = 'translateY(0) scale(1)';
-    incoming.style.opacity = 1;
-    incoming.style.zIndex = 100;
-  }
-
-  setTimeout(function() {
-    idx = ((idx + dir) % filtered.length + filtered.length) % filtered.length;
-    buildStack();
-    isAnimating = false;
-  }, 450);
-}
-
-function snapBack() {
-  // Return center card to rest
-  var center = carousel.querySelector('.tile[data-stack-offset="0"]');
-  if (center) {
-    center.style.transition = 'transform 0.4s ' + SPRING + ', opacity 0.3s ease';
-    center.style.transform = 'translateY(0) scale(1)';
-    center.style.opacity = 1;
-  }
-  // Hide peeking neighbors
-  var cards = carousel.querySelectorAll('.tile');
-  cards.forEach(function(c) {
-    if (c.dataset.stackOffset !== '0') {
-      c.style.transition = 'opacity 0.3s ease';
-      c.style.opacity = 0;
-    }
-  });
-}
-
-function navigate(dir) {
-  commitNavigation(dir, 0);
-}
-
-// Slot-machine shuffle
-function slotShuffle() {
-  if (isAnimating || !filtered.length || filtered.length < 2) return;
-  isAnimating = true;
-  var steps = 5 + Math.floor(Math.random() * 5);
-  var step = 0;
-
-  function tick() {
-    if (step >= steps) {
-      isAnimating = false;
-      buildStack();
-      playSound('click');
-      return;
-    }
-    var dir = 1;
-    var oldCenter = carousel.querySelector('.tile[data-stack-offset="0"]');
-    if (oldCenter) {
-      var dur = 0.08 + step * 0.02;
-      oldCenter.style.transition = 'transform ' + dur + 's ease-in, opacity ' + dur + 's ease';
-      oldCenter.style.transform = 'translateY(-100%) scale(0.9)';
-      oldCenter.style.opacity = 0;
-    }
-    var delay = 60 + step * step * 8;
-    setTimeout(function() {
-      idx = (idx + 1) % filtered.length;
-      buildStack();
-      playSound('slot');
-      step++;
-      tick();
-    }, delay);
-  }
-  tick();
-}
-
-// ============================================
-// GESTURE HANDLING — finger-follow + momentum
-// ============================================
-
-// Touch
-scene.addEventListener('touchstart', function(e) {
-  if (isAnimating) return;
-  isDragging = true;
-  dragY = 0;
-  var touch = e.touches[0];
-  dragStartY = touch.clientY;
-  dragStartX = touch.clientX;
-  lastY = touch.clientY;
-  lastTime = Date.now();
-  vel = 0;
-  cardH = getCardHeight();
-}, { passive: true });
-
-scene.addEventListener('touchmove', function(e) {
-  if (!isDragging) return;
-  var y = e.touches[0].clientY;
-  var now = Date.now();
-  var dt = now - lastTime;
-  if (dt > 0) vel = (lastY - y) / dt * 1000; // px/sec
-  lastY = y;
-  lastTime = now;
-  dragY = dragStartY - y;
-  applyDragOffset(-dragY);
-}, { passive: true });
-
-scene.addEventListener('touchend', function(e) {
-  if (!isDragging) return;
-  isDragging = false;
-  var dy = dragY;
-  var dx = e.changedTouches[0].clientX - dragStartX;
-
-  // Horizontal swipe = action
-  if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
-    snapBack();
-    if (dx > 0) swipeAction('watched');
-    else swipeAction('dnf');
-    return;
-  }
-
-  // Vertical: check threshold (distance OR velocity)
-  var fraction = Math.abs(dy) / (cardH || 500);
-  var fastFlick = Math.abs(vel) > 600;
-
-  if (fraction > SWIPE_THRESHOLD || fastFlick) {
-    var dir = dy > 0 ? 1 : -1;
-    commitNavigation(dir, vel);
+  if (mesh.userData.flipped) {
+    // Flip back to front — reload front texture
+    mesh.userData.flipped = false;
+    createFrontTexture(filtered[ci], function(tex) {
+      mesh.material.map = tex;
+      mesh.material.needsUpdate = true;
+    });
   } else {
-    snapBack();
+    // Flip to back
+    mesh.userData.flipped = true;
+    if (!mesh.userData.backTexture) {
+      mesh.userData.backTexture = createBackTexture(filtered[ci]);
+    }
+    mesh.material.map = mesh.userData.backTexture;
+    mesh.material.needsUpdate = true;
   }
-}, { passive: true });
+}
 
-// Mouse
-scene.addEventListener('mousedown', function(e) {
-  if (isAnimating) return;
-  isDragging = true;
-  dragY = 0;
-  dragStartY = e.clientY;
-  dragStartX = e.clientX;
-  lastY = e.clientY;
-  lastTime = Date.now();
-  vel = 0;
-  cardH = getCardHeight();
+// === ANIMATION LOOP — verbatim from prototype ===
+function wheelAnimate() {
+  wheelAnimId = requestAnimationFrame(wheelAnimate);
+  if (!wheelGroup) return;
+
+  if (!wheelDragging) {
+    wheelVelocity *= FRICTION;
+    if (Math.abs(wheelVelocity) < 0.00003) wheelVelocity = 0;
+    wheelGroup.rotation.x += wheelVelocity;
+  }
+  updateWheelOpacity();
+  updateCounter();
+  wheelRenderer.render(wheelScene, wheelCamera);
+}
+
+// === DRAG HANDLING — verbatim from prototype ===
+var mountEl = document.getElementById('carouselArea');
+
+mountEl.addEventListener('mousedown', function(e) {
   e.preventDefault();
+  wheelDragging = true;
+  wheelLastY = e.clientY;
+  wheelLastX = e.clientX;
+  wheelDragStartY = e.clientY;
+  wheelDragStartX = e.clientX;
+  wheelLastTime = performance.now();
+  wheelVelocity = 0;
 });
 window.addEventListener('mousemove', function(e) {
-  if (!isDragging) return;
-  var now = Date.now();
-  var dt = now - lastTime;
-  if (dt > 0) vel = (lastY - e.clientY) / dt * 1000;
-  lastY = e.clientY;
-  lastTime = now;
-  dragY = dragStartY - e.clientY;
-  applyDragOffset(-dragY);
+  if (!wheelDragging || !wheelGroup) return;
+  var now = performance.now();
+  var dt = now - wheelLastTime || 16;
+  var dy = e.clientY - wheelLastY;
+  wheelVelocity = (dy / dt) * 16 * 0.0025;
+  wheelGroup.rotation.x += wheelVelocity;
+  wheelLastY = e.clientY;
+  wheelLastX = e.clientX;
+  wheelLastTime = now;
 });
 window.addEventListener('mouseup', function(e) {
-  if (!isDragging) return;
-  isDragging = false;
-  var dy = dragY;
-  var dx = e.clientX - dragStartX;
-
-  if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
-    snapBack();
+  if (!wheelDragging) return;
+  wheelDragging = false;
+  // Check for horizontal swipe action
+  var dx = e.clientX - wheelDragStartX;
+  var dy = e.clientY - wheelDragStartY;
+  if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 60) {
+    wheelVelocity = 0;
     if (dx > 0) swipeAction('watched');
     else swipeAction('dnf');
-    return;
   }
-
-  var fraction = Math.abs(dy) / (cardH || 500);
-  var fastFlick = Math.abs(vel) > 600;
-
-  if (fraction > SWIPE_THRESHOLD || fastFlick) {
-    commitNavigation(dy > 0 ? 1 : -1, vel);
-  } else {
-    snapBack();
+  // Check for tap (minimal movement)
+  if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
+    flipCenterTile();
   }
 });
 
-// Scroll wheel — smooth single-card navigation
-var wheelLock = false;
-scene.addEventListener('wheel', function(e) {
+mountEl.addEventListener('touchstart', function(e) {
+  wheelDragging = true;
+  wheelLastY = e.touches[0].clientY;
+  wheelLastX = e.touches[0].clientX;
+  wheelDragStartY = e.touches[0].clientY;
+  wheelDragStartX = e.touches[0].clientX;
+  wheelLastTime = performance.now();
+  wheelVelocity = 0;
+});
+mountEl.addEventListener('touchmove', function(e) {
   e.preventDefault();
-  if (isAnimating || wheelLock) return;
-  if (Math.abs(e.deltaY) > 15) {
-    wheelLock = true;
-    navigate(e.deltaY > 0 ? 1 : -1);
-    setTimeout(function() { wheelLock = false; }, 500);
-  }
+  if (!wheelDragging || !wheelGroup) return;
+  var now = performance.now();
+  var dt = now - wheelLastTime || 16;
+  var dy = e.touches[0].clientY - wheelLastY;
+  wheelVelocity = (dy / dt) * 16 * 0.0025;
+  wheelGroup.rotation.x += wheelVelocity;
+  wheelLastY = e.touches[0].clientY;
+  wheelLastX = e.touches[0].clientX;
+  wheelLastTime = now;
 }, { passive: false });
+mountEl.addEventListener('touchend', function(e) {
+  if (!wheelDragging) return;
+  wheelDragging = false;
+  var dx = e.changedTouches[0].clientX - wheelDragStartX;
+  var dy = e.changedTouches[0].clientY - wheelDragStartY;
+  if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 60) {
+    wheelVelocity = 0;
+    if (dx > 0) swipeAction('watched');
+    else swipeAction('dnf');
+  }
+  if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
+    flipCenterTile();
+  }
+});
+
+// Wheel scroll — verbatim from prototype
+mountEl.addEventListener('wheel', function(e) {
+  e.preventDefault();
+  if (!wheelGroup) return;
+  var impulse = e.deltaY * 0.0008;
+  wheelVelocity += impulse;
+  wheelGroup.rotation.x += impulse;
+}, { passive: false });
+
 document.addEventListener('wheel', function(e) {
   if (e.target.closest('.tile-back') || e.target.closest('.tab-view')) return;
   e.preventDefault();
@@ -1822,17 +1979,19 @@ document.addEventListener('wheel', function(e) {
 
 // Keyboard
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'ArrowUp') { e.preventDefault(); navigate(-1); }
-  else if (e.key === 'ArrowDown') { e.preventDefault(); navigate(1); }
+  if (e.key === 'ArrowUp') { e.preventDefault(); if (wheelGroup) { wheelVelocity = -0.04; } }
+  else if (e.key === 'ArrowDown') { e.preventDefault(); if (wheelGroup) { wheelVelocity = 0.04; } }
   else if (e.key === 'ArrowRight') swipeAction('watched');
   else if (e.key === 'ArrowLeft') swipeAction('dnf');
-  else if (e.key === ' ') {
-    e.preventDefault();
-    playSound('flip');
-    var center = carousel.querySelector('.tile[data-stack-offset="0"]');
-    if (center) center.click();
-  }
+  else if (e.key === ' ') { e.preventDefault(); flipCenterTile(); }
 });
+
+// Slot shuffle — spin the wheel fast then decelerate
+function slotShuffle() {
+  if (!wheelGroup || !WHEEL_NUM) return;
+  wheelVelocity = 0.12 + Math.random() * 0.06;
+  playSound('slot');
+}
 
 // Shuffle button
 document.getElementById('shuffleBtn').addEventListener('click', function() {
