@@ -300,23 +300,23 @@ html {
   transition: transform 0.6s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-/* Fade edges of carousel area */
+/* Fade edges of carousel area — left/right for horizontal */
 .carousel-area::before,
 .carousel-area::after {
   content: '';
   position: absolute;
-  left: 0; right: 0;
-  height: 120px;
+  top: 0; bottom: 0;
+  width: 80px;
   z-index: 2;
   pointer-events: none;
 }
 .carousel-area::before {
-  top: 0;
-  background: linear-gradient(to bottom, var(--void) 0%, transparent 100%);
+  left: 0;
+  background: linear-gradient(to right, var(--void) 0%, transparent 100%);
 }
 .carousel-area::after {
-  bottom: 0;
-  background: linear-gradient(to top, var(--void) 0%, transparent 100%);
+  right: 0;
+  background: linear-gradient(to left, var(--void) 0%, transparent 100%);
 }
 
 /* Individual tile — PHYSICAL SLAB with real 3D thickness */
@@ -1153,7 +1153,7 @@ html {
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
       Shuffle
     </button>
-    <span class="hint-txt">swipe up / down</span>
+    <span class="hint-txt">swipe left / right</span>
     <span class="counter-txt" id="counter"></span>
   </div>
 
@@ -1534,13 +1534,13 @@ function swipeAction(action) {
 }
 
 // ============================================
-// 3D CYLINDER ENGINE — VERBATIM from cylinder-carousel.html
-// Only changed: card content (movie tiles), CARD_HEIGHT (420)
-// ALL motion math, physics, thresholds UNCHANGED from reference
+// HORIZONTAL 3D CAROUSEL — rotateY axis
+// Same physics as cylinder-carousel.html, rotated to horizontal
+// Cards orbit around vertical Y axis instead of horizontal X axis
 // ============================================
 var cylinder = document.getElementById('carousel');
 var scene = document.getElementById('carouselArea');
-var CARD_HEIGHT = 420;
+var CARD_WIDTH = 280;
 var GAP = 30;
 var NUM_CARDS = 0;
 var SLICE = 72;
@@ -1551,10 +1551,11 @@ var targetAngle = 0;
 var autoRotateSpeed = 0.15;
 var isAutoRotating = true;
 var isDragging = false;
+var dragStartX = 0;
 var dragStartY = 0;
 var dragStartAngle = 0;
 var velocity = 0;
-var lastDragY = 0;
+var lastDragX = 0;
 var lastDragTime = 0;
 var hoverPaused = false;
 var idleTimer = null;
@@ -1564,7 +1565,7 @@ function buildCylinder() {
   if (!filtered.length) return;
   NUM_CARDS = filtered.length;
   SLICE = 360 / NUM_CARDS;
-  RADIUS = (NUM_CARDS * (CARD_HEIGHT + GAP)) / (2 * Math.PI);
+  RADIUS = (NUM_CARDS * (CARD_WIDTH + GAP)) / (2 * Math.PI);
 
   filtered.forEach(function(m, i) {
     var savedIdx = idx;
@@ -1572,7 +1573,7 @@ function buildCylinder() {
     var tile = renderTile(true);
     idx = savedIdx;
     if (tile) {
-      tile.style.transform = 'rotateX(' + (i * SLICE) + 'deg) translateZ(' + (-RADIUS) + 'px)';
+      tile.style.transform = 'rotateY(' + (i * SLICE) + 'deg) translateZ(' + (-RADIUS) + 'px)';
       tile.dataset.index = i;
       tile.addEventListener('click', function() { snapToCard(i); });
     }
@@ -1636,7 +1637,7 @@ function updateCardVisibility() {
 
 function animate() {
   if (isAutoRotating && !hoverPaused && !isDragging) {
-    targetAngle += autoRotateSpeed;
+    targetAngle -= autoRotateSpeed;
   }
 
   if (!isDragging && Math.abs(velocity) > 0.01) {
@@ -1647,7 +1648,7 @@ function animate() {
   }
 
   currentAngle += (targetAngle - currentAngle) * 0.12;
-  cylinder.style.transform = 'rotateX(' + currentAngle + 'deg)';
+  cylinder.style.transform = 'rotateY(' + currentAngle + 'deg)';
   updateCardVisibility();
   requestAnimationFrame(animate);
 }
@@ -1664,9 +1665,10 @@ function startDrag(e) {
   isDragging = true;
   isAutoRotating = false;
   velocity = 0;
-  var y = e.touches ? e.touches[0].clientY : e.clientY;
-  dragStartY = y;
-  lastDragY = y;
+  var x = e.touches ? e.touches[0].clientX : e.clientX;
+  dragStartX = x;
+  lastDragX = x;
+  dragStartY = e.touches ? e.touches[0].clientY : e.clientY;
   lastDragTime = Date.now();
   dragStartAngle = targetAngle;
   cylinder.style.transition = 'none';
@@ -1675,17 +1677,17 @@ function startDrag(e) {
 
 function onDrag(e) {
   if (!isDragging) return;
-  var y = e.touches ? e.touches[0].clientY : e.clientY;
-  var delta = y - dragStartY;
+  var x = e.touches ? e.touches[0].clientX : e.clientX;
+  var delta = x - dragStartX;
   var sensitivity = 0.4;
-  targetAngle = dragStartAngle - delta * sensitivity;
+  targetAngle = dragStartAngle + delta * sensitivity;
 
   var now = Date.now();
   var dt = now - lastDragTime;
   if (dt > 0) {
-    velocity = -(y - lastDragY) * sensitivity * (16 / dt);
+    velocity = (x - lastDragX) * sensitivity * (16 / dt);
   }
-  lastDragY = y;
+  lastDragX = x;
   lastDragTime = now;
   e.preventDefault();
 }
@@ -1694,13 +1696,13 @@ function endDrag(e) {
   if (!isDragging) return;
   isDragging = false;
   cylinder.style.transition = '';
-  // Check for horizontal swipe on touch
+  // Check for vertical swipe on touch for watched/DNF
   if (e.changedTouches) {
-    var dx = e.changedTouches[0].clientX - (dragStartX || 0);
-    if (Math.abs(dx) > 60) {
+    var dy = dragStartY - e.changedTouches[0].clientY;
+    if (Math.abs(dy) > 60) {
       velocity = 0;
       targetAngle = dragStartAngle;
-      if (dx > 0) swipeAction('watched');
+      if (dy > 0) swipeAction('watched');
       else swipeAction('dnf');
       return;
     }
@@ -1708,33 +1710,27 @@ function endDrag(e) {
   resetIdleTimer();
 }
 
-// Capture X on drag start for horizontal swipe detection
-var dragStartX = 0;
-var origStartDrag = startDrag;
-startDrag = function(e) {
-  dragStartX = e.touches ? e.touches[0].clientX : e.clientX;
-  origStartDrag(e);
-};
 
 // Scroll — VERBATIM from reference
 scene.addEventListener('wheel', function(e) {
   e.preventDefault();
   isAutoRotating = false;
-  targetAngle -= e.deltaY * 0.15;
+  var scrollDelta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+  targetAngle += scrollDelta * 0.15;
   resetIdleTimer();
 }, { passive: false });
 
 // Keyboard
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'ArrowUp') {
+  if (e.key === 'ArrowLeft') {
     e.preventDefault();
     navigate(-1);
-  } else if (e.key === 'ArrowDown') {
+  } else if (e.key === 'ArrowRight') {
     e.preventDefault();
     navigate(1);
-  } else if (e.key === 'ArrowRight') {
+  } else if (e.key === 'ArrowUp') {
     swipeAction('watched');
-  } else if (e.key === 'ArrowLeft') {
+  } else if (e.key === 'ArrowDown') {
     swipeAction('dnf');
   } else if (e.key === ' ') {
     e.preventDefault();
