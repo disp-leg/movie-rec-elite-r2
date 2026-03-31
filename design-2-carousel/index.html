@@ -117,6 +117,24 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #07060b;
   animation: wfPulse 0.8s ease-in-out infinite alternate;
 }
 @keyframes wfPulse { 0%{height:4px;opacity:0.25} 100%{height:var(--bar-h,24px);opacity:0.7} }
+#backOverlay {
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 310px; height: 440px; z-index: 25; pointer-events: none;
+  display: flex; flex-direction: column; justify-content: flex-end;
+  padding: 0 16px 10px; gap: 4px; opacity: 0;
+}
+#backOverlay.active { pointer-events: auto; opacity: 1; }
+.overlay-stars { display: flex; justify-content: center; gap: 4px; margin-bottom: 2px; }
+.overlay-star { font-size: 22px; cursor: pointer; color: transparent; background: none; border: none; padding: 4px; }
+.overlay-btns { display: flex; justify-content: center; gap: 10px; }
+.overlay-btn {
+  width: 44px; height: 44px; border-radius: 50%; border: none;
+  background: transparent; cursor: pointer; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; font-size: 16px;
+  font-family: inherit; gap: 0; color: transparent;
+}
+.overlay-btn:active { transform: scale(0.9); }
+.overlay-btn-label { font-size: 0; }
 </style>
 </head>
 <body>
@@ -132,6 +150,9 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #07060b;
 
 <!-- Toast -->
 <div class="gesture-toast" id="gestureToast"></div>
+
+<!-- Back tile interactive overlay -->
+<div id="backOverlay"></div>
 
 <!-- UNCUT header -->
 <div class="top-bar">
@@ -336,12 +357,26 @@ function createPosterTexture(movie, callback) {
     ctx.font = '500 '+Math.round(13*TEXTURE_SCALE)+'px sans-serif';
     ctx.textBaseline = 'bottom';
     ctx.fillText(String(movie.year), 20, CANVAS_H-14);
-    // Streaming dots
-    var dotX = CANVAS_W - 20;
-    (movie.streaming||[]).slice().reverse().forEach(function(s) {
-      ctx.beginPath(); ctx.arc(dotX, CANVAS_H-24, 6, 0, Math.PI*2);
-      ctx.fillStyle = streamColors[s] || '#888'; ctx.fill(); dotX -= 18;
+    // Streaming service badges — branded circles with initials
+    var badgeR = 10;
+    var badgeGap = 4;
+    var services = (movie.streaming||[]).slice();
+    var totalBadgeW = services.length * badgeR * 2 + (services.length - 1) * badgeGap;
+    var badgeX = CANVAS_W - 18 - totalBadgeW + badgeR;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    services.forEach(function(s) {
+      // Branded circle
+      ctx.beginPath(); ctx.arc(badgeX, CANVAS_H - 22, badgeR, 0, Math.PI * 2);
+      ctx.fillStyle = streamColors[s] || '#666'; ctx.fill();
+      // White border
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1; ctx.stroke();
+      // Service initial
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold ' + Math.round(11 * TEXTURE_SCALE / 1.68) + 'px sans-serif';
+      ctx.fillText(s.charAt(0), badgeX, CANVAS_H - 22);
+      badgeX += badgeR * 2 + badgeGap;
     });
+    ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; // Reset alignment
     ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 1.5;
     roundRect(ctx,1,1,CANVAS_W-2,CANVAS_H-2,cr); ctx.stroke();
     ctx.restore();
@@ -389,13 +424,13 @@ function wrapText(ctx, text, maxW, maxLines) {
   return lines;
 }
 
-function drawFrostedQuoteCard(ctx, quote, x, y, w, G, maxY) {
+function drawFrostedQuoteCard(ctx, quote, x, y, w, G, maxY, starCount, starColor) {
   if (!quote) return y;
   var fontSize = G * 0.88; // ~11px — compact
   var lineH = G * 1.4;
   ctx.font = 'italic ' + fontSize + 'px -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif';
   var lines = wrapText(ctx, quote, w - G*3.5, 3);
-  var cardH = lines.length * lineH + G * 2;
+  var cardH = lines.length * lineH + G * 2 + (starCount ? G * 1.2 : 0);
   // Hard ceiling — never draw past maxY
   if (maxY && y + cardH > maxY) return y;
   // Light frosted glass panel
@@ -413,6 +448,17 @@ function drawFrostedQuoteCard(ctx, quote, x, y, w, G, maxY) {
   ctx.font = 'italic ' + fontSize + 'px -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif';
   for (var k=0; k<lines.length; k++) {
     ctx.fillText(lines[k], x + G * 2.2, y + G * 1.4 + k * lineH);
+  }
+  // Star rating for this review
+  if (starCount) {
+    var ratingY = y + G * 1.4 + lines.length * lineH + G * 0.3;
+    ctx.fillStyle = starColor || 'rgba(30,30,50,0.3)';
+    ctx.font = (G * 0.7) + 'px ' + '-apple-system, "SF Pro Display", "Helvetica Neue", sans-serif';
+    ctx.textAlign = 'left';
+    var starStr = '';
+    for (var si = 0; si < starCount; si++) starStr += '\u2605';
+    ctx.fillText(starStr, x + G * 2.2, ratingY);
+    ctx.textAlign = 'left'; // reset
   }
   ctx.restore();
   return y + cardH + G * 0.6;
@@ -506,10 +552,10 @@ function createBackTexture(movie) {
   if (q5Text === q1Text) q5Text = '';
   var bottomPinY = CANVAS_H - G * 13; // hard ceiling — nothing above this bleeds into stars
   if (q1Text) {
-    y = drawFrostedQuoteCard(ctx, q1Text, P, y, W, G, bottomPinY);
+    y = drawFrostedQuoteCard(ctx, q1Text, P, y, W, G, bottomPinY, 1, '#ef4444');
   }
   if (q5Text) {
-    y = drawFrostedQuoteCard(ctx, q5Text, P, y, W, G, bottomPinY);
+    y = drawFrostedQuoteCard(ctx, q5Text, P, y, W, G, bottomPinY, 5, '#22c55e');
   }
 
   // === BOTTOM SECTION — pinned, 8px grid aligned ===
@@ -536,9 +582,10 @@ function createBackTexture(movie) {
 
   // 3 CIRCULAR ACTION BUTTONS — 44px touch targets (G*5.5), centered row
   var btnY = CANVAS_H - G * 7;
-  var btnR = G * 2.75; // ~22px radius = 44px diameter
-  var btnGap = G * 3;
+  var btnR = G * 2.2; // Slightly smaller for 4 buttons
+  var btnGap = G * 1.8;
   var btns = [
+    {ch:'\u2665', label:'Max', c:'#e05060', bg:'rgba(224,80,96,0.12)', border:'rgba(224,80,96,0.25)'},
     {ch:'\u2665', label:'Like', c:'#c0384a', bg:'rgba(192,56,74,0.10)', border:'rgba(192,56,74,0.25)'},
     {ch:'\u2606', label:'Save', c:'#9a7b2a', bg:'rgba(154,123,42,0.10)', border:'rgba(154,123,42,0.20)'},
     {ch:'\u2715', label:'DNF',  c:'rgba(30,30,50,0.40)', bg:'rgba(30,30,50,0.05)', border:'rgba(30,30,50,0.12)'}
@@ -721,6 +768,7 @@ function navigateWheel(dir) {
     centerMesh.userData.flipped = false;
     if (centerMesh.userData.frontTex) { centerMesh.material.map = centerMesh.userData.frontTex; centerMesh.material.needsUpdate = true; }
     centerMesh.rotation.y = 0;
+    hideBackOverlay();
   }
 
   // Positive rotation = tiles from below rise up (swipe up = next)
@@ -803,8 +851,12 @@ function flipCenterTile() {
     mesh.userData.backTex = createBackTexture(filtered[listIdx]);
   }
   var targetTex = wasFlipped ? mesh.userData.frontTex : mesh.userData.backTex;
-  var tl = gsap.timeline({ onComplete: function() { mesh.userData.flipped = !wasFlipped; isFlipping = false; } });
-  tl.to(mesh.rotation, { y: wasFlipped ? Math.PI/2 : Math.PI/2, duration: 0.2, ease: 'power2.in'})
+  var tl = gsap.timeline({ onComplete: function() {
+    mesh.userData.flipped = !wasFlipped;
+    isFlipping = false;
+    if (!wasFlipped) showBackOverlay(); else hideBackOverlay();
+  }});
+  tl.to(mesh.rotation, { y: Math.PI/2, duration: 0.2, ease: 'power2.in'})
     .call(function() { mesh.material.map = targetTex; mesh.material.needsUpdate = true; })
     .to(mesh.rotation, { y: wasFlipped ? 0 : Math.PI, duration: 0.2, ease: 'power2.out'});
 }
@@ -816,6 +868,107 @@ function animate() {
   if (renderer && scene && camera) renderer.render(scene, camera);
 }
 animate();
+
+// === BACK TILE OVERLAY — interactive buttons ===
+var backOverlay = document.getElementById('backOverlay');
+function buildBackOverlay() {
+  backOverlay.innerHTML = '';
+  // Star rating row
+  var starRow = document.createElement('div');
+  starRow.className = 'overlay-stars';
+  for (var i = 1; i <= 5; i++) {
+    var star = document.createElement('button');
+    star.className = 'overlay-star';
+    star.textContent = '\u2606';
+    star.dataset.val = i;
+    star.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var val = parseInt(this.dataset.val);
+      var movie = filtered[listIdx];
+      if (movie) {
+        ratings[movie.id] = (ratings[movie.id] === val) ? 0 : val;
+        updateOverlayStars();
+        // Rebuild back texture with new rating
+        var mesh = meshes[getCenterSlot()];
+        if (mesh) { mesh.userData.backTex = createBackTexture(movie); mesh.material.map = mesh.userData.backTex; mesh.material.needsUpdate = true; }
+      }
+    });
+    starRow.appendChild(star);
+  }
+  backOverlay.appendChild(starRow);
+  // Action buttons row
+  var btnRow = document.createElement('div');
+  btnRow.className = 'overlay-btns';
+  var btns = [
+    {cls:'maxlike', icon:'\u2665', label:'Max', action:'maxlike'},
+    {cls:'like', icon:'\u2665', label:'Like', action:'like'},
+    {cls:'save', icon:'\u2606', label:'Save', action:'save'},
+    {cls:'dnf', icon:'\u2715', label:'DNF', action:'dnf'}
+  ];
+  btns.forEach(function(b) {
+    var btn = document.createElement('button');
+    btn.className = 'overlay-btn ' + b.cls;
+    var iconSpan = document.createElement('span');
+    iconSpan.textContent = b.icon;
+    var labelSpan = document.createElement('span');
+    labelSpan.className = 'overlay-btn-label';
+    labelSpan.textContent = b.label;
+    btn.appendChild(iconSpan);
+    btn.appendChild(labelSpan);
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      handleBackAction(b.action);
+    });
+    btnRow.appendChild(btn);
+  });
+  backOverlay.appendChild(btnRow);
+}
+buildBackOverlay();
+
+function updateOverlayStars() {
+  var movie = filtered[listIdx];
+  var uR = movie ? (ratings[movie.id] || 0) : 0;
+  var stars = backOverlay.querySelectorAll('.overlay-star');
+  stars.forEach(function(s, i) {
+    s.textContent = (i < uR) ? '\u2605' : '\u2606';
+    s.className = 'overlay-star' + (i < uR ? ' filled' : '');
+  });
+}
+
+function showBackOverlay() {
+  updateOverlayStars();
+  backOverlay.classList.add('active');
+}
+function hideBackOverlay() {
+  backOverlay.classList.remove('active');
+}
+
+function handleBackAction(action) {
+  var m = filtered[listIdx];
+  if (!m) return;
+  if (action === 'maxlike') {
+    if (!watchlistArr.find(function(x){return x.id===m.id;})) watchlistArr.push(m);
+    showToast('\u2665\u2665', 'Max Like!');
+  } else if (action === 'like') {
+    if (!historyArr.find(function(x){return x.id===m.id;})) historyArr.push(m);
+    showToast('\u2665', 'Liked');
+  } else if (action === 'save') {
+    if (!watchlistArr.find(function(x){return x.id===m.id;})) watchlistArr.push(m);
+    showToast('\u2606', 'Saved');
+  } else if (action === 'dnf') {
+    showToast('\u2715', 'DNF');
+    flipCenterTile();
+    setTimeout(function() {
+      filtered = filtered.filter(function(f){return f.id!==m.id;});
+      if (listIdx >= filtered.length) listIdx = 0;
+      rebuildWheel();
+    }, 450);
+    return;
+  }
+  // Flip back after action (except DNF which already flips)
+  flipCenterTile();
+  setTimeout(function() { navigateWheel(1); }, 450);
+}
 
 // === SWIPE / TAP DETECTION ===
 var startY = 0, startX = 0, startTime = 0;
@@ -902,7 +1055,7 @@ function swipeAction(action) {
   }
 }
 
-// === SHUFFLE — slot-machine spin (guarded against double-fire) ===
+// === SHUFFLE — slot-machine spin with clean snap (guarded against double-fire) ===
 var isShuffling = false;
 document.getElementById('shuffleBtn').addEventListener('click', function() {
   if (!filtered.length || isAnimating || isShuffling) return;
@@ -911,20 +1064,22 @@ document.getElementById('shuffleBtn').addEventListener('click', function() {
   var target = Math.floor(Math.random() * filtered.length);
   var startX = group.rotation.x;
 
-  // Total spin: 5-7 full revolutions for dramatic slot-machine feel
-  var totalSpin = (5 + Math.random() * 2) * Math.PI * 2;
+  // Spin must land on an exact ANGLE_STEP multiple for clean snap
+  // 5-7 full revolutions worth of tile steps
+  var minSteps = NUM_TILES * 5;
+  var maxSteps = NUM_TILES * 7;
+  var totalSteps = minSteps + Math.floor(Math.random() * (maxSteps - minSteps));
+  var totalSpin = totalSteps * ANGLE_STEP;
 
   gsap.killTweensOf(group.rotation);
 
-  // Single tween with customEase-like behavior via onUpdate counter
-  // Phase 1 feel (fast) + Phase 2 feel (decelerate) via expo ease
   gsap.to(group.rotation, {
     x: startX + totalSpin,
     duration: 1.4,
     ease: 'expo.out',
     overwrite: 'all',
     onComplete: function() {
-      // Snap to target
+      // Snap: reset to clean position, reload textures for target movie
       listIdx = target;
       group.rotation.x = 0;
       loadWindowTextures();
