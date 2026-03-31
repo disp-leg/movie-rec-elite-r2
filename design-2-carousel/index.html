@@ -432,35 +432,29 @@ function wrapText(ctx, text, maxW, maxLines) {
   return lines;
 }
 
-// Pick the shortest punchy sentence under charLimit from a review quote
+// Pick the best complete sentence from a review quote
+// Prefers: under charLimit, shortest, most punchy. Always returns a COMPLETE sentence.
 function pickPunchyQuote(text, charLimit) {
   if (!text) return '';
-  // Strip HTML tags
-  var clean = text.replace(/<[^>]+>/g, '');
-  // Split into sentences
+  var clean = text.replace(/<[^>]+>/g, '').trim();
+  // Split into complete sentences (ending with . ! or ?)
   var sentences = clean.match(/[^.!?]+[.!?]+/g);
-  if (!sentences || !sentences.length) {
-    if (clean.length <= charLimit) return clean;
-    var cut = clean.slice(0, charLimit);
-    var sp = cut.lastIndexOf(' ');
-    return sp > 20 ? cut.slice(0, sp) : cut;
+  if (!sentences || !sentences.length) return clean; // no sentence boundaries — return as-is
+  // Clean up each sentence
+  for (var i = 0; i < sentences.length; i++) sentences[i] = sentences[i].trim();
+  // Find sentences under charLimit
+  var short = [];
+  for (var j = 0; j < sentences.length; j++) {
+    if (sentences[j].length <= charLimit) short.push(sentences[j]);
   }
-  // Filter to sentences under charLimit, pick shortest
-  var candidates = [];
-  for (var i = 0; i < sentences.length; i++) {
-    var s = sentences[i].trim();
-    if (s.length > 0 && s.length <= charLimit) candidates.push(s);
+  if (short.length) {
+    // Pick shortest among those under the limit (punchiest)
+    short.sort(function(a, b) { return a.length - b.length; });
+    return short[0];
   }
-  if (!candidates.length) {
-    // No sentence fits under limit — cut at last word boundary before charLimit
-    var trimmed = clean.slice(0, charLimit);
-    var lastSpace = trimmed.lastIndexOf(' ');
-    if (lastSpace > 20) trimmed = trimmed.slice(0, lastSpace);
-    return trimmed;
-  }
-  // Among candidates, prefer shorter ones (punchier)
-  candidates.sort(function(a, b) { return a.length - b.length; });
-  return candidates[0];
+  // No sentence under limit — pick the shortest complete sentence, font will auto-shrink
+  var sorted = sentences.slice().sort(function(a, b) { return a.length - b.length; });
+  return sorted[0];
 }
 
 // Condense synopsis to 2-3 short sentences
