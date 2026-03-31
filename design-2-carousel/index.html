@@ -389,27 +389,30 @@ function wrapText(ctx, text, maxW, maxLines) {
   return lines;
 }
 
-function drawFrostedQuoteCard(ctx, quote, x, y, w, G) {
+function drawFrostedQuoteCard(ctx, quote, x, y, w, G, maxY) {
   if (!quote) return y;
-  var lineH = G * 2.1;
-  ctx.font = 'italic ' + (G * 1.4) + 'px -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif';
-  var lines = wrapText(ctx, quote, w - G*5, 6);
-  var cardH = lines.length * lineH + G * 3;
+  var fontSize = G * 1.05;
+  var lineH = G * 1.65;
+  ctx.font = 'italic ' + fontSize + 'px -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif';
+  var lines = wrapText(ctx, quote, w - G*4, 4);
+  var cardH = lines.length * lineH + G * 2.5;
+  // Don't draw if it would overlap the bottom pinned section
+  if (maxY && y + cardH > maxY) return y;
   // Light frosted glass panel
-  roundRect(ctx, x, y, w, cardH, G);
+  roundRect(ctx, x, y, w, cardH, G * 0.8);
   ctx.fillStyle = 'rgba(255,255,255,0.30)'; ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,0.50)'; ctx.lineWidth = 1; ctx.stroke();
-  // Large decorative quote mark
-  ctx.fillStyle = 'rgba(30,30,50,0.10)';
-  ctx.font = '700 ' + (G * 3.5) + 'px Georgia, "Times New Roman", serif';
-  ctx.fillText('\u201C', x + G, y + G * 0.5);
-  // Quote text — dark on light
-  ctx.fillStyle = 'rgba(30,30,50,0.65)';
-  ctx.font = 'italic ' + (G * 1.4) + 'px -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif';
+  // Decorative quote mark
+  ctx.fillStyle = 'rgba(30,30,50,0.08)';
+  ctx.font = '700 ' + (G * 2.5) + 'px Georgia, "Times New Roman", serif';
+  ctx.fillText('\u201C', x + G * 0.6, y + G * 0.3);
+  // Quote text — compact dark on light
+  ctx.fillStyle = 'rgba(30,30,50,0.6)';
+  ctx.font = 'italic ' + fontSize + 'px -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif';
   for (var k=0; k<lines.length; k++) {
-    ctx.fillText(lines[k], x + G * 3.5, y + G * 2 + k * lineH);
+    ctx.fillText(lines[k], x + G * 2.8, y + G * 1.6 + k * lineH);
   }
-  return y + cardH + G;
+  return y + cardH + G * 0.8;
 }
 
 function createBackTexture(movie) {
@@ -498,11 +501,12 @@ function createBackTexture(movie) {
   var q1Text = movie.q1 || '';
   var q5Text = movie.q5 || '';
   if (q5Text === q1Text) q5Text = '';
+  var bottomPinY = CANVAS_H - G * 13; // hard ceiling — nothing above this bleeds into stars
   if (q1Text) {
-    y = drawFrostedQuoteCard(ctx, q1Text, P, y, W, G);
+    y = drawFrostedQuoteCard(ctx, q1Text, P, y, W, G, bottomPinY);
   }
-  if (q5Text && y < CANVAS_H - G * 18) {
-    y = drawFrostedQuoteCard(ctx, q5Text, P, y, W, G);
+  if (q5Text) {
+    y = drawFrostedQuoteCard(ctx, q5Text, P, y, W, G, bottomPinY);
   }
 
   // === BOTTOM SECTION — pinned, 8px grid aligned ===
@@ -797,9 +801,9 @@ function flipCenterTile() {
   }
   var targetTex = wasFlipped ? mesh.userData.frontTex : mesh.userData.backTex;
   var tl = gsap.timeline({ onComplete: function() { mesh.userData.flipped = !wasFlipped; isFlipping = false; } });
-  tl.to(mesh.rotation, { y: wasFlipped ? Math.PI/2 : Math.PI/2, duration: 0.2, ease: 'power2.in', force3D: true })
+  tl.to(mesh.rotation, { y: wasFlipped ? Math.PI/2 : Math.PI/2, duration: 0.2, ease: 'power2.in'})
     .call(function() { mesh.material.map = targetTex; mesh.material.needsUpdate = true; })
-    .to(mesh.rotation, { y: wasFlipped ? 0 : Math.PI, duration: 0.2, ease: 'power2.out', force3D: true });
+    .to(mesh.rotation, { y: wasFlipped ? 0 : Math.PI, duration: 0.2, ease: 'power2.out'});
 }
 
 // === ANIMATION LOOP (render only, no velocity) ===
@@ -891,45 +895,35 @@ function swipeAction(action) {
   }
 }
 
-// === SHUFFLE — slot-machine effect (guarded against double-fire) ===
+// === SHUFFLE — slot-machine spin (guarded against double-fire) ===
 var isShuffling = false;
 document.getElementById('shuffleBtn').addEventListener('click', function() {
   if (!filtered.length || isAnimating || isShuffling) return;
   isAnimating = true;
   isShuffling = true;
   var target = Math.floor(Math.random() * filtered.length);
-
-  // Calculate spin amounts
-  var fullRevolutions = (4 + Math.floor(Math.random() * 3)) * Math.PI * 2; // 4-6 full revs
-  var landingOffset = target * ANGLE_STEP; // where the target tile sits on the wheel
   var startX = group.rotation.x;
+
+  // Total spin: 5-7 full revolutions for dramatic slot-machine feel
+  var totalSpin = (5 + Math.random() * 2) * Math.PI * 2;
 
   gsap.killTweensOf(group.rotation);
 
-  var tl = gsap.timeline({
+  // Single tween with customEase-like behavior via onUpdate counter
+  // Phase 1 feel (fast) + Phase 2 feel (decelerate) via expo ease
+  gsap.to(group.rotation, {
+    x: startX + totalSpin,
+    duration: 1.4,
+    ease: 'expo.out',
+    overwrite: 'all',
     onComplete: function() {
-      // Snap state: set listIdx, reset rotation, reload textures
+      // Snap to target
       listIdx = target;
       group.rotation.x = 0;
       loadWindowTextures();
       updateCounter();
-      // Keep locked until textures settle
       setTimeout(function() { isAnimating = false; isShuffling = false; }, 400);
     }
-  });
-
-  // Phase 1: Fast acceleration — spin through 4-6 full revolutions
-  tl.to(group.rotation, {
-    x: startX + fullRevolutions,
-    duration: 0.8,
-    ease: 'power1.in'
-  });
-
-  // Phase 2: Deceleration — slow down and land precisely on target
-  tl.to(group.rotation, {
-    x: startX + fullRevolutions + landingOffset + Math.PI * 2,
-    duration: 0.6,
-    ease: 'power3.out'
   });
 });
 
