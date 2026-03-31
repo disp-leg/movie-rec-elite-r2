@@ -424,6 +424,23 @@ function wrapText(ctx, text, maxW, maxLines) {
   return lines;
 }
 
+function capQuote(text, cap) {
+  cap = cap || 145;
+  if (!text || text.length <= cap) return text;
+  var sentenceEnd = -1;
+  var markers = ['."', '!"', '?"', '. '];
+  for (var p = 0; p < markers.length; p++) {
+    var idx = text.lastIndexOf(markers[p], cap);
+    if (idx > cap * 0.55 && idx + markers[p].length > sentenceEnd) {
+      sentenceEnd = idx + markers[p].length;
+    }
+  }
+  if (sentenceEnd > 0) return text.slice(0, sentenceEnd);
+  var wordCut = text.slice(0, cap).replace(/\s+\S*$/, '');
+  wordCut += '\u2026';
+  return wordCut;
+}
+
 function drawFrostedQuoteCard(ctx, quote, x, y, w, G, maxY, starCount, starColor) {
   if (!quote) return y;
   var fontSize = G * 0.88; // ~11px — compact
@@ -505,15 +522,27 @@ function createBackTexture(movie) {
 
   var y = P;
 
-  // === TITLE — largest element, bold (visual hierarchy level 1) ===
+  // === TITLE — auto-shrink + 2-line wrap (visual hierarchy level 1) ===
   ctx.fillStyle = '#1a1a2e';
-  ctx.font = '700 ' + (G * 2.5) + 'px ' + FONT;
   ctx.textBaseline = 'top';
-  var t = movie.title;
-  while (ctx.measureText(t).width > W && t.length > 8) t = t.slice(0,-1);
-  if (t !== movie.title) t += '\u2026';
-  ctx.fillText(t, P, y);
-  y += G * 4; // 32px below title
+  var titleFont = G * 2.5;
+  var titleMinFont = Math.round(G * 1.85);
+  ctx.font = '700 ' + titleFont + 'px ' + FONT;
+  while (ctx.measureText(movie.title).width > W && titleFont > titleMinFont) {
+    titleFont -= 1;
+    ctx.font = '700 ' + titleFont + 'px ' + FONT;
+  }
+  if (ctx.measureText(movie.title).width <= W) {
+    ctx.fillText(movie.title, P, y);
+    y += G * 3.5;
+  } else {
+    var titleLines = wrapText(ctx, movie.title, W, 2);
+    var titleLH = G * 3;
+    for (var ti = 0; ti < titleLines.length; ti++) {
+      ctx.fillText(titleLines[ti], P, y + ti * titleLH);
+    }
+    y += titleLines.length * titleLH + G * 1;
+  }
 
   // === SUBGENRE PILL ===
   var tier = tiers.find(function(x){return x.key===movie.tier;});
@@ -534,7 +563,16 @@ function createBackTexture(movie) {
   // === SYNOPSIS — level 3 hierarchy, 5 lines max ===
   ctx.fillStyle = 'rgba(30,30,50,0.55)';
   ctx.font = '400 ' + (G * 1.4) + 'px ' + FONT;
-  var synLines = wrapText(ctx, movie.synopsis, W, 5);
+  var synText = movie.synopsis || '';
+  if (synText.length > 280) {
+    var synCut = synText.lastIndexOf('. ', 280);
+    if (synCut > 168) {
+      synText = synText.slice(0, synCut + 1);
+    } else {
+      synText = synText.slice(0, 280).replace(/\s+\S*$/, '') + '\u2026';
+    }
+  }
+  var synLines = wrapText(ctx, synText, W, 5);
   var synLH = G * 2.3;
   for (var si=0; si<synLines.length; si++) {
     ctx.fillText(synLines[si], P, y); y += synLH;
@@ -547,15 +585,22 @@ function createBackTexture(movie) {
   y += G * 1.5;
 
   // === TWO FROSTED GLASS QUOTE CARDS ===
-  var q1Text = movie.q1 || '';
-  var q5Text = movie.q5 || '';
+  var q1Text = capQuote(movie.q1 || '');
+  var q5Text = capQuote(movie.q5 || '');
   if (q5Text === q1Text) q5Text = '';
   var bottomPinY = CANVAS_H - G * 13; // hard ceiling — nothing above this bleeds into stars
-  if (q1Text) {
-    y = drawFrostedQuoteCard(ctx, q1Text, P, y, W, G, bottomPinY, 1, '#ef4444');
-  }
-  if (q5Text) {
-    y = drawFrostedQuoteCard(ctx, q5Text, P, y, W, G, bottomPinY, 5, '#22c55e');
+  var quoteAvailable = bottomPinY - y;
+  if (quoteAvailable < G * 10.4) {
+    if (quoteAvailable >= G * 5.2 && q1Text) {
+      y = drawFrostedQuoteCard(ctx, q1Text, P, y, W, G, bottomPinY, 1, '#ef4444');
+    }
+  } else {
+    if (q1Text) {
+      y = drawFrostedQuoteCard(ctx, q1Text, P, y, W, G, bottomPinY, 1, '#ef4444');
+    }
+    if (q5Text) {
+      y = drawFrostedQuoteCard(ctx, q5Text, P, y, W, G, bottomPinY, 5, '#22c55e');
+    }
   }
 
   // === BOTTOM SECTION — pinned, 8px grid aligned ===
@@ -759,6 +804,7 @@ function updateCounter() {
 function navigateWheel(dir) {
   // dir: +1 = next (swipe up), -1 = prev (swipe down)
   if (isAnimating || !filtered.length) return;
+  shuffleLock = false;
   isAnimating = true;
 
   // If center is flipped, flip back instantly
@@ -799,7 +845,7 @@ function navigateWheel(dir) {
       var tailFacing = Math.cos(tailAngle);
 
       // Only swap if tile is behind the cylinder (facing < -0.3 = well hidden)
-      if (tailFacing < -0.3) {
+      if (tailFacing < -0.3 && !shuffleLock) {
         var tailOffset = dir > 0 ? half : -half;
         var tailMovieIdx = ((listIdx + tailOffset) % filtered.length + filtered.length) % filtered.length;
         var mesh = meshes[tailSlot];
@@ -1057,10 +1103,12 @@ function swipeAction(action) {
 
 // === SHUFFLE — slot-machine spin with clean snap (guarded against double-fire) ===
 var isShuffling = false;
+var shuffleLock = false;
 document.getElementById('shuffleBtn').addEventListener('click', function() {
   if (!filtered.length || isAnimating || isShuffling) return;
   isAnimating = true;
   isShuffling = true;
+  shuffleLock = true;
   var target = Math.floor(Math.random() * filtered.length);
   var startX = group.rotation.x;
 
