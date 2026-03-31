@@ -371,7 +371,7 @@ function createPosterTexture(movie, callback) {
 }
 
 // === BACK TEXTURE — Premium streaming-app detail card ===
-// 8px grid system, Apple TV+ / Letterboxd-inspired
+// 8px grid system, Light frosted glass — Apple Invites / tasteskill.dev aesthetic
 function wrapText(ctx, text, maxW, maxLines) {
   var words = (text||'').split(' '), line='', lines=[];
   for (var i=0; i<words.length && lines.length<maxLines; i++) {
@@ -391,21 +391,21 @@ function wrapText(ctx, text, maxW, maxLines) {
 
 function drawFrostedQuoteCard(ctx, quote, x, y, w, G) {
   if (!quote) return y;
-  var lineH = G * 2.25;
-  ctx.font = 'italic ' + (G * 1.5) + 'px -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif';
-  var lines = wrapText(ctx, quote, w - G*5, 2);
+  var lineH = G * 2.1;
+  ctx.font = 'italic ' + (G * 1.4) + 'px -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif';
+  var lines = wrapText(ctx, quote, w - G*5, 6);
   var cardH = lines.length * lineH + G * 3;
-  // Frosted glass panel — rgba(255,255,255,0.08) with visible border
+  // Light frosted glass panel
   roundRect(ctx, x, y, w, cardH, G);
-  ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 0.5; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.30)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.50)'; ctx.lineWidth = 1; ctx.stroke();
   // Large decorative quote mark
-  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  ctx.fillStyle = 'rgba(30,30,50,0.10)';
   ctx.font = '700 ' + (G * 3.5) + 'px Georgia, "Times New Roman", serif';
   ctx.fillText('\u201C', x + G, y + G * 0.5);
-  // Quote text
-  ctx.fillStyle = 'rgba(255,255,255,0.5)';
-  ctx.font = 'italic ' + (G * 1.5) + 'px -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif';
+  // Quote text — dark on light
+  ctx.fillStyle = 'rgba(30,30,50,0.65)';
+  ctx.font = 'italic ' + (G * 1.4) + 'px -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif';
   for (var k=0; k<lines.length; k++) {
     ctx.fillText(lines[k], x + G * 3.5, y + G * 2 + k * lineH);
   }
@@ -427,22 +427,34 @@ function createBackTexture(movie) {
   ctx.translate(CANVAS_W, 0); ctx.scale(-1, 1);
   roundRect(ctx, 0, 0, CANVAS_W, CANVAS_H, cr); ctx.clip();
 
-  // === BG: rich matte black with subtle depth ===
-  ctx.fillStyle = '#0a090e';
+  // === BG: LIGHT FROSTED GLASS — luminous panel on dark scene ===
+  // Layer 1: solid light cool-gray base
+  ctx.fillStyle = 'rgb(205, 208, 220)';
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-  // Warm ambient glow — top-left
-  var glow1 = ctx.createRadialGradient(CANVAS_W*0.2, CANVAS_H*0.1, 0, CANVAS_W*0.4, CANVAS_H*0.3, CANVAS_H*0.6);
-  glow1.addColorStop(0, 'rgba(60,40,70,0.10)'); glow1.addColorStop(1, 'rgba(0,0,0,0)');
+  // Layer 2: warm radial glow — top center for depth
+  var glow1 = ctx.createRadialGradient(CANVAS_W*0.5, CANVAS_H*0.15, 0, CANVAS_W*0.5, CANVAS_H*0.3, CANVAS_H*0.7);
+  glow1.addColorStop(0, 'rgba(230,225,240,0.6)'); glow1.addColorStop(1, 'rgba(200,202,215,0)');
   ctx.fillStyle = glow1; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-  // Cool ambient — bottom-right
-  var glow2 = ctx.createRadialGradient(CANVAS_W*0.8, CANVAS_H*0.85, 0, CANVAS_W*0.7, CANVAS_H*0.7, CANVAS_H*0.5);
-  glow2.addColorStop(0, 'rgba(30,40,60,0.06)'); glow2.addColorStop(1, 'rgba(0,0,0,0)');
+  // Layer 3: cool accent — bottom edge
+  var glow2 = ctx.createRadialGradient(CANVAS_W*0.5, CANVAS_H*0.95, 0, CANVAS_W*0.5, CANVAS_H*0.8, CANVAS_H*0.4);
+  glow2.addColorStop(0, 'rgba(190,200,225,0.4)'); glow2.addColorStop(1, 'rgba(200,202,215,0)');
   ctx.fillStyle = glow2; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+  // Layer 4: frosted noise texture — tiny scattered dots
+  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  for (var ni=0; ni<120; ni++) {
+    var nx = Math.random() * CANVAS_W, ny = Math.random() * CANVAS_H;
+    ctx.beginPath(); ctx.arc(nx, ny, Math.random()*2+0.5, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.fillStyle = 'rgba(180,180,200,0.06)';
+  for (var ni2=0; ni2<80; ni2++) {
+    var nx2 = Math.random() * CANVAS_W, ny2 = Math.random() * CANVAS_H;
+    ctx.beginPath(); ctx.arc(nx2, ny2, Math.random()*1.5+0.5, 0, Math.PI*2); ctx.fill();
+  }
 
   var y = P;
 
-  // === TITLE — largest element, bold 18px (visual hierarchy level 1) ===
-  ctx.fillStyle = '#f0ede7';
+  // === TITLE — largest element, bold (visual hierarchy level 1) ===
+  ctx.fillStyle = '#1a1a2e';
   ctx.font = '700 ' + (G * 2.5) + 'px ' + FONT;
   ctx.textBaseline = 'top';
   var t = movie.title;
@@ -460,25 +472,25 @@ function createBackTexture(movie) {
     var gw = ctx.measureText(pillText).width + G * 2;
     var gh = G * 2.5;
     roundRect(ctx, P, y, gw, gh, gh/2);
-    ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 0.5; ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.40)'; ctx.lineWidth = 0.5; ctx.stroke();
+    ctx.fillStyle = 'rgba(30,30,50,0.55)';
     ctx.fillText(pillText, P + G, y + G * 0.7);
     y += gh + G * 1.5;
   }
 
-  // === SYNOPSIS — level 3 hierarchy, 2 lines max ===
-  ctx.fillStyle = 'rgba(255,255,255,0.4)';
-  ctx.font = '400 ' + (G * 1.5) + 'px ' + FONT;
-  var synLines = wrapText(ctx, movie.synopsis, W, 2);
-  var synLH = G * 2.5;
+  // === SYNOPSIS — level 3 hierarchy, 5 lines max ===
+  ctx.fillStyle = 'rgba(30,30,50,0.55)';
+  ctx.font = '400 ' + (G * 1.4) + 'px ' + FONT;
+  var synLines = wrapText(ctx, movie.synopsis, W, 5);
+  var synLH = G * 2.3;
   for (var si=0; si<synLines.length; si++) {
     ctx.fillText(synLines[si], P, y); y += synLH;
   }
   y += G * 1.5;
 
   // === THIN DIVIDER ===
-  ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth = 0.5;
+  ctx.strokeStyle = 'rgba(30,30,50,0.08)'; ctx.lineWidth = 0.5;
   ctx.beginPath(); ctx.moveTo(P, y); ctx.lineTo(P+W, y); ctx.stroke();
   y += G * 1.5;
 
@@ -507,10 +519,10 @@ function createBackTexture(movie) {
     var sx = starX + s * (starFontSize + starGap) + starFontSize/2;
     ctx.font = starFontSize + 'px ' + FONT;
     if (s < uR) {
-      ctx.fillStyle = '#d4a84a';
+      ctx.fillStyle = '#b8860b';
       ctx.fillText('\u2605', sx, starY);
     } else {
-      ctx.fillStyle = 'rgba(255,255,255,0.1)';
+      ctx.fillStyle = 'rgba(30,30,50,0.15)';
       ctx.fillText('\u2606', sx, starY);
     }
   }
@@ -520,9 +532,9 @@ function createBackTexture(movie) {
   var btnR = G * 2.75; // ~22px radius = 44px diameter
   var btnGap = G * 3;
   var btns = [
-    {ch:'\u2665', label:'Like', c:'#e05060', bg:'rgba(224,80,96,0.08)', border:'rgba(224,80,96,0.15)'},
-    {ch:'\u2606', label:'Save', c:'#d4b85a', bg:'rgba(212,184,90,0.08)', border:'rgba(212,184,90,0.12)'},
-    {ch:'\u2715', label:'DNF',  c:'rgba(255,255,255,0.35)', bg:'rgba(255,255,255,0.04)', border:'rgba(255,255,255,0.08)'}
+    {ch:'\u2665', label:'Like', c:'#c0384a', bg:'rgba(192,56,74,0.10)', border:'rgba(192,56,74,0.25)'},
+    {ch:'\u2606', label:'Save', c:'#9a7b2a', bg:'rgba(154,123,42,0.10)', border:'rgba(154,123,42,0.20)'},
+    {ch:'\u2715', label:'DNF',  c:'rgba(30,30,50,0.40)', bg:'rgba(30,30,50,0.05)', border:'rgba(30,30,50,0.12)'}
   ];
   var totalBtnW = btns.length * btnR*2 + (btns.length-1) * btnGap;
   var btnStartX = (CANVAS_W - totalBtnW) / 2 + btnR;
@@ -537,7 +549,7 @@ function createBackTexture(movie) {
     ctx.font = (G * 2) + 'px ' + FONT;
     ctx.fillText(btns[b].ch, bx, btnY);
     // Label
-    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.fillStyle = 'rgba(30,30,50,0.30)';
     ctx.font = '500 ' + (G * 1) + 'px ' + FONT;
     ctx.fillText(btns[b].label, bx, btnY + btnR + G * 1.2);
   }
@@ -553,15 +565,15 @@ function createBackTexture(movie) {
   stArr.forEach(function(name) {
     ctx.beginPath(); ctx.arc(stX + G*0.4, stY, G*0.4, 0, Math.PI*2);
     ctx.fillStyle = streamColors[name]||'#555'; ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.fillStyle = 'rgba(30,30,50,0.40)';
     ctx.font = '600 ' + (G * 1.1) + 'px ' + FONT;
     ctx.fillText(name, stX + G, stY);
     stX += G + ctx.measureText(name).width + G * 1.5;
   });
 
-  // Outer border — barely visible
+  // Outer border — subtle white glow
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  ctx.strokeStyle = 'rgba(255,255,255,0.025)'; ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1.5;
   roundRect(ctx, 1, 1, CANVAS_W-2, CANVAS_H-2, cr); ctx.stroke();
 
   ctx.restore();
@@ -879,23 +891,24 @@ function swipeAction(action) {
   }
 }
 
-// === SHUFFLE — jump to random movie (guarded against double-fire) ===
+// === SHUFFLE — slot-machine effect (guarded against double-fire) ===
 var isShuffling = false;
 document.getElementById('shuffleBtn').addEventListener('click', function() {
   if (!filtered.length || isAnimating || isShuffling) return;
   isAnimating = true;
   isShuffling = true;
   var target = Math.floor(Math.random() * filtered.length);
-  // Quick spin for visual flair
-  var spinAmount = (1 + Math.random()) * Math.PI * 2;
+
+  // Calculate spin amounts
+  var fullRevolutions = (4 + Math.floor(Math.random() * 3)) * Math.PI * 2; // 4-6 full revs
+  var landingOffset = target * ANGLE_STEP; // where the target tile sits on the wheel
+  var startX = group.rotation.x;
+
   gsap.killTweensOf(group.rotation);
-  gsap.to(group.rotation, {
-    x: group.rotation.x + spinAmount,
-    duration: 0.8,
-    ease: 'power3.inOut',
-    overwrite: 'all',
+
+  var tl = gsap.timeline({
     onComplete: function() {
-      // Land on target movie — set position, reload, then hold lock
+      // Snap state: set listIdx, reset rotation, reload textures
       listIdx = target;
       group.rotation.x = 0;
       loadWindowTextures();
@@ -903,6 +916,20 @@ document.getElementById('shuffleBtn').addEventListener('click', function() {
       // Keep locked until textures settle
       setTimeout(function() { isAnimating = false; isShuffling = false; }, 400);
     }
+  });
+
+  // Phase 1: Fast acceleration — spin through 4-6 full revolutions
+  tl.to(group.rotation, {
+    x: startX + fullRevolutions,
+    duration: 0.8,
+    ease: 'power1.in'
+  });
+
+  // Phase 2: Deceleration — slow down and land precisely on target
+  tl.to(group.rotation, {
+    x: startX + fullRevolutions + landingOffset + Math.PI * 2,
+    duration: 0.6,
+    ease: 'power3.out'
   });
 });
 
