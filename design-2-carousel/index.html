@@ -974,7 +974,7 @@ function flipCenterTile() {
   isFlipping = true;
   var wasFlipped = mesh.userData.flipped;
   if (!wasFlipped && !mesh.userData.backTex) {
-    mesh.userData.backTex = createBackTexture(filtered[listIdx]);
+    mesh.userData.backTex = createBackTexture(filtered[mesh.userData.movieIdx]);
   }
   var targetTex = wasFlipped ? mesh.userData.frontTex : mesh.userData.backTex;
   var tl = gsap.timeline({ onComplete: function() {
@@ -1010,12 +1010,12 @@ function buildBackOverlay() {
     star.addEventListener('click', function(e) {
       e.stopPropagation();
       var val = parseInt(this.dataset.val);
-      var movie = filtered[listIdx];
+      var mesh = meshes[getCenterSlot()];
+      var movie = mesh ? filtered[mesh.userData.movieIdx] : null;
       if (movie) {
         ratings[movie.id] = (ratings[movie.id] === val) ? 0 : val;
         updateOverlayStars();
         // Rebuild back texture with new rating
-        var mesh = meshes[getCenterSlot()];
         if (mesh) { mesh.userData.backTex = createBackTexture(movie); mesh.material.map = mesh.userData.backTex; mesh.material.needsUpdate = true; }
       }
     });
@@ -1052,7 +1052,8 @@ function buildBackOverlay() {
 buildBackOverlay();
 
 function updateOverlayStars() {
-  var movie = filtered[listIdx];
+  var mesh = meshes[getCenterSlot()];
+  var movie = mesh ? filtered[mesh.userData.movieIdx] : null;
   var uR = movie ? (ratings[movie.id] || 0) : 0;
   var stars = backOverlay.querySelectorAll('.overlay-star');
   stars.forEach(function(s, i) {
@@ -1075,7 +1076,8 @@ function hideBackOverlay() {
 }
 
 function handleBackAction(action) {
-  var m = filtered[listIdx];
+  var centerMesh = meshes[getCenterSlot()];
+  var m = centerMesh ? filtered[centerMesh.userData.movieIdx] : null;
   if (!m) return;
   if (action === 'maxlike') {
     if (!watchlistArr.find(function(x){return x.id===m.id;})) watchlistArr.push(m);
