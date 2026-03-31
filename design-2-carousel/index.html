@@ -370,149 +370,198 @@ function createPosterTexture(movie, callback) {
   setTimeout(useFallback, 6000);
 }
 
-// === BACK TEXTURE ===
+// === BACK TEXTURE — Premium streaming-app detail card ===
+// 8px grid system, Apple TV+ / Letterboxd-inspired
+function wrapText(ctx, text, maxW, maxLines) {
+  var words = (text||'').split(' '), line='', lines=[];
+  for (var i=0; i<words.length && lines.length<maxLines; i++) {
+    var test = line + words[i] + ' ';
+    if (ctx.measureText(test).width > maxW && line) {
+      lines.push(line.trim()); line = words[i] + ' ';
+    } else line = test;
+  }
+  if (line && lines.length < maxLines) {
+    if (i < words.length) line = line.trim().replace(/...$/, '') + '\u2026';
+    lines.push(line.trim());
+  } else if (lines.length === maxLines && i < words.length) {
+    lines[maxLines-1] = lines[maxLines-1].replace(/...$/, '') + '\u2026';
+  }
+  return lines;
+}
+
+function drawFrostedQuoteCard(ctx, quote, x, y, w, G) {
+  if (!quote) return y;
+  var lineH = G * 2.25;
+  ctx.font = 'italic ' + (G * 1.5) + 'px -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif';
+  var lines = wrapText(ctx, quote, w - G*5, 2);
+  var cardH = lines.length * lineH + G * 3;
+  // Frosted glass panel — rgba(255,255,255,0.08) with visible border
+  roundRect(ctx, x, y, w, cardH, G);
+  ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 0.5; ctx.stroke();
+  // Large decorative quote mark
+  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  ctx.font = '700 ' + (G * 3.5) + 'px Georgia, "Times New Roman", serif';
+  ctx.fillText('\u201C', x + G, y + G * 0.5);
+  // Quote text
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.font = 'italic ' + (G * 1.5) + 'px -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif';
+  for (var k=0; k<lines.length; k++) {
+    ctx.fillText(lines[k], x + G * 3.5, y + G * 2 + k * lineH);
+  }
+  return y + cardH + G;
+}
+
 function createBackTexture(movie) {
   var canvas = document.createElement('canvas');
   canvas.width = CANVAS_W; canvas.height = CANVAS_H;
   var ctx = canvas.getContext('2d');
-  var cr = 20; var S = TEXTURE_SCALE; var P = 32; var W = CANVAS_W - P*2;
+  var cr = 20;
+  // G = 8px grid unit scaled to texture
+  var G = Math.round(8 * TEXTURE_SCALE);
+  var P = G * 3; // 24px padding
+  var W = CANVAS_W - P * 2;
+  var FONT = '-apple-system, "SF Pro Display", "Helvetica Neue", sans-serif';
 
   ctx.save();
   ctx.translate(CANVAS_W, 0); ctx.scale(-1, 1);
   roundRect(ctx, 0, 0, CANVAS_W, CANVAS_H, cr); ctx.clip();
 
-  // === BG: deep black with ultra-subtle warm gradient ===
-  ctx.fillStyle = '#0c0b10';
+  // === BG: rich matte black with subtle depth ===
+  ctx.fillStyle = '#0a090e';
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-  var warm = ctx.createRadialGradient(CANVAS_W*0.3, CANVAS_H*0.2, 0, CANVAS_W*0.3, CANVAS_H*0.2, CANVAS_H*0.6);
-  warm.addColorStop(0, 'rgba(40,30,20,0.15)'); warm.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = warm; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+  // Warm ambient glow — top-left
+  var glow1 = ctx.createRadialGradient(CANVAS_W*0.2, CANVAS_H*0.1, 0, CANVAS_W*0.4, CANVAS_H*0.3, CANVAS_H*0.6);
+  glow1.addColorStop(0, 'rgba(60,40,70,0.10)'); glow1.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = glow1; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+  // Cool ambient — bottom-right
+  var glow2 = ctx.createRadialGradient(CANVAS_W*0.8, CANVAS_H*0.85, 0, CANVAS_W*0.7, CANVAS_H*0.7, CANVAS_H*0.5);
+  glow2.addColorStop(0, 'rgba(30,40,60,0.06)'); glow2.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = glow2; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
   var y = P;
 
-  // === TITLE ===
-  ctx.fillStyle = '#f2efe9';
-  ctx.font = '700 ' + Math.round(24*S) + 'px sans-serif';
+  // === TITLE — largest element, bold 18px (visual hierarchy level 1) ===
+  ctx.fillStyle = '#f0ede7';
+  ctx.font = '700 ' + (G * 2.5) + 'px ' + FONT;
   ctx.textBaseline = 'top';
   var t = movie.title;
   while (ctx.measureText(t).width > W && t.length > 8) t = t.slice(0,-1);
   if (t !== movie.title) t += '\u2026';
   ctx.fillText(t, P, y);
-  y += 38;
+  y += G * 4; // 32px below title
 
-  // === META ROW: year, runtime, rating ===
-  var rt = movie.runtime ? Math.floor(movie.runtime/60) + 'h ' + (movie.runtime%60) + 'm' : '';
-  ctx.fillStyle = 'rgba(255,255,255,0.35)';
-  ctx.font = '500 ' + Math.round(13*S) + 'px sans-serif';
-  ctx.fillText(movie.year + (rt ? '   ' + rt : '') + '   \u2605 ' + movie.rating, P, y);
-  y += 28;
-
-  // === GENRE TAG ===
+  // === SUBGENRE PILL ===
   var tier = tiers.find(function(x){return x.key===movie.tier;});
-  var genre = tier ? tier.label.toUpperCase() : '';
+  var genre = tier ? tier.label : '';
   if (genre) {
-    ctx.font = '700 ' + Math.round(9*S) + 'px sans-serif';
-    var gw = ctx.measureText(genre).width + 18;
-    roundRect(ctx, P, y, gw, 20, 10);
-    ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.fillText(genre, P+9, y+5);
-    y += 32;
+    ctx.font = '600 ' + (G * 1.1) + 'px ' + FONT;
+    var pillText = genre.toUpperCase();
+    var gw = ctx.measureText(pillText).width + G * 2;
+    var gh = G * 2.5;
+    roundRect(ctx, P, y, gw, gh, gh/2);
+    ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 0.5; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillText(pillText, P + G, y + G * 0.7);
+    y += gh + G * 1.5;
   }
 
-  // === DIVIDER ===
-  ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 1;
+  // === SYNOPSIS — level 3 hierarchy, 2 lines max ===
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.font = '400 ' + (G * 1.5) + 'px ' + FONT;
+  var synLines = wrapText(ctx, movie.synopsis, W, 2);
+  var synLH = G * 2.5;
+  for (var si=0; si<synLines.length; si++) {
+    ctx.fillText(synLines[si], P, y); y += synLH;
+  }
+  y += G * 1.5;
+
+  // === THIN DIVIDER ===
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth = 0.5;
   ctx.beginPath(); ctx.moveTo(P, y); ctx.lineTo(P+W, y); ctx.stroke();
-  y += 16;
+  y += G * 1.5;
 
-  // === SYNOPSIS: clean, 4 lines max ===
-  ctx.fillStyle = 'rgba(255,255,255,0.52)';
-  ctx.font = '400 ' + Math.round(14*S) + 'px sans-serif';
-  var sw = (movie.synopsis||'').split(' '), sl='', sn=0;
-  for (var i=0; i<sw.length && sn<4; i++) {
-    var test = sl + sw[i] + ' ';
-    if (ctx.measureText(test).width > W && sl) { ctx.fillText(sl.trim(),P,y); y+=24; sn++; sl=sw[i]+' '; }
-    else sl = test;
+  // === TWO FROSTED GLASS QUOTE CARDS ===
+  var q1Text = movie.q1 || '';
+  var q5Text = movie.q5 || '';
+  if (q5Text === q1Text) q5Text = '';
+  if (q1Text) {
+    y = drawFrostedQuoteCard(ctx, q1Text, P, y, W, G);
   }
-  if (sl && sn<4) {
-    if (sn===3 && i<sw.length) sl=sl.trim().slice(0,-3)+'\u2026';
-    ctx.fillText(sl.trim(),P,y); y+=24;
-  }
-  y += 12;
-
-  // === REVIEW QUOTE (one, in a glass card) ===
-  var quote = movie.q1 || movie.q5 || '';
-  if (quote && y < CANVAS_H - 160) {
-    var qShort = quote.substring(0,100);
-    ctx.font = 'italic ' + Math.round(12*S) + 'px sans-serif';
-    var qw = qShort.split(' '), ql='', qArr=[];
-    for (var j=0; j<qw.length; j++) {
-      var qt = ql + qw[j] + ' ';
-      if (ctx.measureText(qt).width > W-40 && ql) { qArr.push(ql.trim()); ql=qw[j]+' '; }
-      else ql = qt;
-    }
-    if (ql) qArr.push(ql.trim());
-    if (qArr.length > 2) { qArr=qArr.slice(0,2); qArr[1]=qArr[1].slice(0,-3)+'\u2026'; }
-    var qH = qArr.length * 22 + 24;
-    roundRect(ctx, P, y, W, qH, 10);
-    ctx.fillStyle = 'rgba(255,255,255,0.03)'; ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 0.5; ctx.stroke();
-    // Opening quote mark
-    ctx.fillStyle = 'rgba(255,255,255,0.1)';
-    ctx.font = '700 ' + Math.round(26*S) + 'px Georgia, serif';
-    ctx.fillText('\u201C', P+10, y+14);
-    // Text
-    ctx.fillStyle = 'rgba(255,255,255,0.38)';
-    ctx.font = 'italic ' + Math.round(12*S) + 'px sans-serif';
-    for (var k=0; k<qArr.length; k++) ctx.fillText(qArr[k], P+30, y+16+k*22);
-    y += qH + 12;
+  if (q5Text && y < CANVAS_H - G * 18) {
+    y = drawFrostedQuoteCard(ctx, q5Text, P, y, W, G);
   }
 
-  // === BOTTOM SECTION — pinned at bottom ===
-  var bY = CANVAS_H - 80;
+  // === BOTTOM SECTION — pinned, 8px grid aligned ===
 
-  // Stars
-  ctx.font = Math.round(19*S) + 'px sans-serif';
+  // 5 INTERACTIVE STARS — centered
+  var starY = CANVAS_H - G * 12;
   var uR = ratings[movie.id] || 0;
-  for (var s=0; s<5; s++) {
-    ctx.fillStyle = s<uR ? '#d4a84a' : 'rgba(255,255,255,0.1)';
-    ctx.fillText(s<uR ? '\u2605' : '\u2606', P + s*30, bY);
-  }
-
-  // Action icons — right side
-  var icons = [
-    {ch:'\u2665', c:'rgba(200,70,70,0.75)'},
-    {ch:'\u2606', c:'rgba(200,180,80,0.6)'},
-    {ch:'\u2715', c:'rgba(255,255,255,0.3)'}
-  ];
-  var bx = CANVAS_W - P;
+  var starFontSize = G * 2.75;
+  var starGap = G * 1.2;
+  var starsW = 5 * starFontSize + 4 * starGap;
+  var starX = (CANVAS_W - starsW) / 2;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  for (var b=icons.length-1; b>=0; b--) {
-    bx -= 15;
-    ctx.beginPath(); ctx.arc(bx, bY+4, 14, 0, Math.PI*2);
-    ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.lineWidth = 1; ctx.stroke();
-    ctx.fillStyle = icons[b].c; ctx.font = Math.round(14*S)+'px sans-serif';
-    ctx.fillText(icons[b].ch, bx, bY+4);
-    bx -= 20;
+  for (var s=0; s<5; s++) {
+    var sx = starX + s * (starFontSize + starGap) + starFontSize/2;
+    ctx.font = starFontSize + 'px ' + FONT;
+    if (s < uR) {
+      ctx.fillStyle = '#d4a84a';
+      ctx.fillText('\u2605', sx, starY);
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,0.1)';
+      ctx.fillText('\u2606', sx, starY);
+    }
   }
-  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
 
-  // Streaming at very bottom
-  var stY = CANVAS_H - 36;
-  ctx.fillStyle = 'rgba(255,255,255,0.15)';
-  ctx.font = '600 ' + Math.round(9*S) + 'px sans-serif';
-  var sx = P;
-  (movie.streaming||[]).forEach(function(name) {
-    ctx.beginPath(); ctx.arc(sx+3, stY+4, 3.5, 0, Math.PI*2);
-    ctx.fillStyle = streamColors[name]||'#444'; ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = Math.round(10*S)+'px sans-serif';
-    ctx.fillText(name, sx+10, stY);
-    sx += ctx.measureText(name).width + 22;
+  // 3 CIRCULAR ACTION BUTTONS — 44px touch targets (G*5.5), centered row
+  var btnY = CANVAS_H - G * 7;
+  var btnR = G * 2.75; // ~22px radius = 44px diameter
+  var btnGap = G * 3;
+  var btns = [
+    {ch:'\u2665', label:'Like', c:'#e05060', bg:'rgba(224,80,96,0.08)', border:'rgba(224,80,96,0.15)'},
+    {ch:'\u2606', label:'Save', c:'#d4b85a', bg:'rgba(212,184,90,0.08)', border:'rgba(212,184,90,0.12)'},
+    {ch:'\u2715', label:'DNF',  c:'rgba(255,255,255,0.35)', bg:'rgba(255,255,255,0.04)', border:'rgba(255,255,255,0.08)'}
+  ];
+  var totalBtnW = btns.length * btnR*2 + (btns.length-1) * btnGap;
+  var btnStartX = (CANVAS_W - totalBtnW) / 2 + btnR;
+  for (var b=0; b<btns.length; b++) {
+    var bx = btnStartX + b * (btnR*2 + btnGap);
+    // Frosted glass circle
+    ctx.beginPath(); ctx.arc(bx, btnY, btnR, 0, Math.PI*2);
+    ctx.fillStyle = btns[b].bg; ctx.fill();
+    ctx.strokeStyle = btns[b].border; ctx.lineWidth = 1; ctx.stroke();
+    // Icon
+    ctx.fillStyle = btns[b].c;
+    ctx.font = (G * 2) + 'px ' + FONT;
+    ctx.fillText(btns[b].ch, bx, btnY);
+    // Label
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.font = '500 ' + (G * 1) + 'px ' + FONT;
+    ctx.fillText(btns[b].label, bx, btnY + btnR + G * 1.2);
+  }
+
+  // STREAMING ROW — very bottom, centered
+  var stY = CANVAS_H - G * 1.5;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  var stArr = movie.streaming || [];
+  ctx.font = '600 ' + (G * 1.1) + 'px ' + FONT;
+  var totalStW = 0;
+  stArr.forEach(function(name) { totalStW += G + ctx.measureText(name).width + G * 1.5; });
+  var stX = (CANVAS_W - totalStW) / 2;
+  stArr.forEach(function(name) {
+    ctx.beginPath(); ctx.arc(stX + G*0.4, stY, G*0.4, 0, Math.PI*2);
+    ctx.fillStyle = streamColors[name]||'#555'; ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.font = '600 ' + (G * 1.1) + 'px ' + FONT;
+    ctx.fillText(name, stX + G, stY);
+    stX += G + ctx.measureText(name).width + G * 1.5;
   });
 
-  // Outer glow border
-  ctx.strokeStyle = 'rgba(255,255,255,0.03)'; ctx.lineWidth = 1;
+  // Outer border — barely visible
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.strokeStyle = 'rgba(255,255,255,0.025)'; ctx.lineWidth = 1;
   roundRect(ctx, 1, 1, CANVAS_W-2, CANVAS_H-2, cr); ctx.stroke();
 
   ctx.restore();
@@ -672,28 +721,34 @@ function navigateWheel(dir) {
       // When moving forward (dir=+1), the tile that was behind center (dir's tail)
       // is now the furthest back — replace it with the new edge movie.
       var half = Math.floor(NUM_TILES / 2);
-      // The slot that is now at the back: it's the one half-way around from new center
       var newCenterSlot = getCenterSlot();
       // The tail slot (opposite side of where we're heading)
       var tailSlot = (newCenterSlot + (dir > 0 ? half : -half) + NUM_TILES) % NUM_TILES;
-      // The movie that should be on that tail slot
-      var tailOffset = dir > 0 ? half : -half;
-      var tailMovieIdx = ((listIdx + tailOffset) % filtered.length + filtered.length) % filtered.length;
 
-      // Swap only that one mesh's texture (it's behind the cylinder, invisible)
-      var mesh = meshes[tailSlot];
-      mesh.userData.movieIdx = tailMovieIdx;
-      mesh.userData.flipped = false;
-      mesh.userData.backTex = null;
-      mesh.rotation.y = 0;
-      (function(m, movie) {
-        createPosterTexture(movie, function(tex) {
-          m.userData.frontTex = tex;
-          m.material.map = tex;
-          m.material.color.set(0xffffff);
-          m.material.needsUpdate = true;
-        });
-      })(mesh, filtered[tailMovieIdx]);
+      // SAFETY: Only swap if the tail tile is truly hidden (facing away from camera)
+      var TWO_PI = Math.PI * 2;
+      var tailAngle = (tailSlot * ANGLE_STEP + group.rotation.x) % TWO_PI;
+      if (tailAngle < 0) tailAngle += TWO_PI;
+      var tailFacing = Math.cos(tailAngle);
+
+      // Only swap if tile is behind the cylinder (facing < -0.3 = well hidden)
+      if (tailFacing < -0.3) {
+        var tailOffset = dir > 0 ? half : -half;
+        var tailMovieIdx = ((listIdx + tailOffset) % filtered.length + filtered.length) % filtered.length;
+        var mesh = meshes[tailSlot];
+        mesh.userData.movieIdx = tailMovieIdx;
+        mesh.userData.flipped = false;
+        mesh.userData.backTex = null;
+        mesh.rotation.y = 0;
+        (function(m, movie) {
+          createPosterTexture(movie, function(tex) {
+            m.userData.frontTex = tex;
+            m.material.map = tex;
+            m.material.color.set(0xffffff);
+            m.material.needsUpdate = true;
+          });
+        })(mesh, filtered[tailMovieIdx]);
+      }
 
       isAnimating = false;
       updateCounter();
@@ -824,26 +879,29 @@ function swipeAction(action) {
   }
 }
 
-// === SHUFFLE — jump to random movie ===
+// === SHUFFLE — jump to random movie (guarded against double-fire) ===
+var isShuffling = false;
 document.getElementById('shuffleBtn').addEventListener('click', function() {
-  if (!filtered.length || isAnimating) return;
+  if (!filtered.length || isAnimating || isShuffling) return;
   isAnimating = true;
+  isShuffling = true;
   var target = Math.floor(Math.random() * filtered.length);
   // Quick spin for visual flair
   var spinAmount = (1 + Math.random()) * Math.PI * 2;
+  gsap.killTweensOf(group.rotation);
   gsap.to(group.rotation, {
     x: group.rotation.x + spinAmount,
     duration: 0.8,
     ease: 'power3.inOut',
-    overwrite: true,
+    overwrite: 'all',
     onComplete: function() {
-      // Land on random movie — set position, reload, then hold lock
+      // Land on target movie — set position, reload, then hold lock
       listIdx = target;
       group.rotation.x = 0;
       loadWindowTextures();
       updateCounter();
-      // Keep locked briefly so textures load before user can interact
-      setTimeout(function() { isAnimating = false; }, 300);
+      // Keep locked until textures settle
+      setTimeout(function() { isAnimating = false; isShuffling = false; }, 400);
     }
   });
 });
