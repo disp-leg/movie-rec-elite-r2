@@ -331,9 +331,9 @@ function createPosterTexture(movie, callback) {
     var g = ctx.createLinearGradient(0, CANVAS_H-oh, 0, CANVAS_H);
     g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(0.3,'rgba(0,0,0,0.4)'); g.addColorStop(1,'rgba(0,0,0,0.8)');
     ctx.fillStyle = g; ctx.fillRect(0, CANVAS_H-oh, CANVAS_W, oh);
-    // Year
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    ctx.font = '600 '+Math.round(20*TEXTURE_SCALE)+'px sans-serif';
+    // Year — subtle
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.font = '500 '+Math.round(13*TEXTURE_SCALE)+'px sans-serif';
     ctx.textBaseline = 'bottom';
     ctx.fillText(String(movie.year), 20, CANVAS_H-14);
     // Streaming dots
@@ -391,28 +391,31 @@ function wrapText(ctx, text, maxW, maxLines) {
 
 function drawFrostedQuoteCard(ctx, quote, x, y, w, G, maxY) {
   if (!quote) return y;
-  var fontSize = G * 1.05;
-  var lineH = G * 1.65;
+  var fontSize = G * 0.88; // ~11px — compact
+  var lineH = G * 1.4;
   ctx.font = 'italic ' + fontSize + 'px -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif';
-  var lines = wrapText(ctx, quote, w - G*4, 4);
-  var cardH = lines.length * lineH + G * 2.5;
-  // Don't draw if it would overlap the bottom pinned section
+  var lines = wrapText(ctx, quote, w - G*3.5, 3);
+  var cardH = lines.length * lineH + G * 2;
+  // Hard ceiling — never draw past maxY
   if (maxY && y + cardH > maxY) return y;
   // Light frosted glass panel
-  roundRect(ctx, x, y, w, cardH, G * 0.8);
+  roundRect(ctx, x, y, w, cardH, G * 0.6);
   ctx.fillStyle = 'rgba(255,255,255,0.30)'; ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,0.50)'; ctx.lineWidth = 1; ctx.stroke();
+  // Clip to card bounds so nothing overflows
+  ctx.save(); roundRect(ctx, x, y, w, cardH, G * 0.6); ctx.clip();
   // Decorative quote mark
-  ctx.fillStyle = 'rgba(30,30,50,0.08)';
-  ctx.font = '700 ' + (G * 2.5) + 'px Georgia, "Times New Roman", serif';
-  ctx.fillText('\u201C', x + G * 0.6, y + G * 0.3);
-  // Quote text — compact dark on light
-  ctx.fillStyle = 'rgba(30,30,50,0.6)';
+  ctx.fillStyle = 'rgba(30,30,50,0.06)';
+  ctx.font = '700 ' + (G * 2) + 'px Georgia, "Times New Roman", serif';
+  ctx.fillText('\u201C', x + G * 0.5, y + G * 0.2);
+  // Quote text
+  ctx.fillStyle = 'rgba(30,30,50,0.55)';
   ctx.font = 'italic ' + fontSize + 'px -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif';
   for (var k=0; k<lines.length; k++) {
-    ctx.fillText(lines[k], x + G * 2.8, y + G * 1.6 + k * lineH);
+    ctx.fillText(lines[k], x + G * 2.2, y + G * 1.4 + k * lineH);
   }
-  return y + cardH + G * 0.8;
+  ctx.restore();
+  return y + cardH + G * 0.6;
 }
 
 function createBackTexture(movie) {
@@ -816,13 +819,17 @@ animate();
 
 // === SWIPE / TAP DETECTION ===
 var startY = 0, startX = 0, startTime = 0;
+var pointerOnMount = false; // Track if the gesture started on mount
 var mount = document.getElementById('mount');
 
 function onPointerDown(x, y) {
   if (isAnimating) return;
+  pointerOnMount = true;
   startX = x; startY = y; startTime = performance.now();
 }
 function onPointerUp(x, y) {
+  if (!pointerOnMount) return; // Ignore if gesture didn't start on mount
+  pointerOnMount = false;
   if (isAnimating && !isFlipping) return;
   var dx = x - startX, dy = startY - y;
   var dt = performance.now() - startTime;
