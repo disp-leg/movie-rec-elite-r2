@@ -153,13 +153,12 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #07060b;
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script>
 // ============================================
 // DATA
 // ============================================
 var movies = [
-{"id": 1, "title": "The Black Phone", "year": 2022, "director": "Scott Derrickson", "tier": "trapped", "poster": "https://image.tmdb.org/t/p/w500/p9ZUzCyy9wRTDuuQexkQ78R2BgF.jpg", "synopsis": "Finney Blake, a shy but clever 13-year-old boy, is abducted by a sadistic killer and trapped in a soundproof basement where screaming is of little use. When a disconnected phone on the wall begins to ", "streaming": ["Netflix"], "rating": 3.8, "runtime": 103, "q1": "Excelente Pel?cula, sin duda la volveria a ver de nuevo", "q5": "The thing about adapting a short story for cinema is that we tend to get a great deal of padding to get it to the duration. This film is certainly guilty of tha"},
 {"id": 2, "title": "The Purge: Anarchy", "year": 2014, "director": "James DeMonaco", "tier": "revenge", "poster": "https://image.tmdb.org/t/p/w500/qwqHHZLZSUvMkAMQ47ymtfjEifY.jpg", "synopsis": "One night per year, the government sanctions a 12-hour period in which citizens can commit any crime they wish -- including murder -- without fear of punishment or imprisonment. Leo, a sergeant who lo", "streaming": ["Tubi"], "rating": 3.3, "runtime": 103, "q1": "A total mess of a film. It clearly tries to expand on the bigger picture that we missed out on last time - but the fact is that past the initial frightening ide", "q5": "Inevitable sequel. Good idea though. It was interesting to see the poor deal with the night of terror this time. The acting wasn't great nor was it great the fi"},
 {"id": 3, "title": "The Poughkeepsie Tapes", "year": 2007, "director": "John Erick Dowdle", "tier": "body-horror", "poster": "https://image.tmdb.org/t/p/w500/8ppkhu3pO3fnXr05YeE7ryKloVd.jpg", "synopsis": "When hundreds of videotapes showing torture, murder and dismemberment are found in an abandoned house, they reveal a serial killer's decade-long reign of terror and become the most disturbing collecti", "streaming": ["Tubi"], "rating": 3.3, "runtime": 81, "q1": "When hundreds of videotapes showing torture, murder and dismemberment are found in an abandoned house, they reveal a serial killer's decade-long reign of terror", "q5": "When hundreds of videotapes showing torture, murder and dismemberment are found in an abandoned house, they reveal a serial killer's decade-long reign of terror"},
 {"id": 4, "title": "Silent Night, Deadly Night", "year": 2025, "director": "Mike P. Nelson", "tier": "deep-cuts", "poster": "https://image.tmdb.org/t/p/w500/xCdSd7NnRdnL8DGLVhI95WhUNoi.jpg", "synopsis": "After witnessing his parents' brutal murder on Christmas Eve, Billy transforms into a Killer Santa, delivering a yearly spree of calculated, chilling violence. This year, his blood-soaked mission coll", "streaming": ["Tubi"], "rating": 3.1, "runtime": 96, "q1": "This reminded me a bit of \"Violent Night\" (2022) as it rather challenges the typical image of the avuncular Santa Claus. This one, here, is much more focussed o", "q5": "This reminded me a bit of \"Violent Night\" (2022) as it rather challenges the typical image of the avuncular Santa Claus. This one, here, is much more focussed o"},
@@ -342,171 +341,159 @@ function createBackTexture(movie) {
   var ctx = canvas.getContext('2d');
   var cr = 20;
   var S = TEXTURE_SCALE;
-  var pad = 28;
+  var pad = 30;
   var innerW = CANVAS_W - pad * 2;
 
   ctx.save();
-  ctx.translate(CANVAS_W, 0); ctx.scale(-1, 1); // mirror for Y-flip
-
-  // === DARK BACKGROUND with subtle gradient ===
+  ctx.translate(CANVAS_W, 0); ctx.scale(-1, 1);
   roundRect(ctx, 0, 0, CANVAS_W, CANVAS_H, cr); ctx.clip();
+
+  // === DARK MATTE BACKGROUND ===
   var bg = ctx.createLinearGradient(0, 0, 0, CANVAS_H);
-  bg.addColorStop(0, '#141318'); bg.addColorStop(0.5, '#111016'); bg.addColorStop(1, '#0d0c12');
+  bg.addColorStop(0, '#0f0e14'); bg.addColorStop(1, '#0a0912');
   ctx.fillStyle = bg; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
-  // Subtle noise grain overlay
-  ctx.fillStyle = 'rgba(255,255,255,0.015)';
-  for (var n = 0; n < 200; n++) {
-    ctx.fillRect(Math.random()*CANVAS_W, Math.random()*CANVAS_H, 1, 1);
-  }
+  // Subtle top highlight line
+  var hl = ctx.createLinearGradient(pad, 0, CANVAS_W - pad, 0);
+  hl.addColorStop(0, 'rgba(255,255,255,0)'); hl.addColorStop(0.5, 'rgba(255,255,255,0.06)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = hl; ctx.fillRect(pad, cr, innerW, 1);
 
-  var yP = pad + 5;
+  var y = pad + 14;
 
-  // === TITLE — large, white, tracked ===
-  ctx.fillStyle = '#f0ede8';
-  ctx.font = '700 ' + Math.round(28 * S) + 'px sans-serif';
+  // === TITLE ===
+  ctx.fillStyle = '#eeeae4';
+  ctx.font = '700 ' + Math.round(26 * S) + 'px sans-serif';
   ctx.textBaseline = 'top';
-  // Truncate title if too wide
   var title = movie.title;
-  while (ctx.measureText(title).width > innerW && title.length > 10) title = title.slice(0,-1);
-  ctx.fillText(title, pad, yP);
-  yP += Math.round(36 * S / S) + 10;
+  while (ctx.measureText(title).width > innerW - 10 && title.length > 8) title = title.slice(0, -1);
+  if (title !== movie.title) title += '...';
+  ctx.fillText(title, pad, y);
+  y += 44;
 
-  // === META LINE — year | runtime | rating ===
-  var rt = movie.runtime ? Math.floor(movie.runtime/60) + 'h ' + (movie.runtime%60) + 'm' : '';
-  ctx.fillStyle = 'rgba(255,255,255,0.35)';
-  ctx.font = '500 ' + Math.round(15 * S) + 'px sans-serif';
-  ctx.fillText(movie.year + (rt ? '  \u00B7  ' + rt : '') + '  \u00B7  \u2605 ' + movie.rating, pad, yP);
-  yP += 32;
+  // === META — frosted glass bar ===
+  var rt = movie.runtime ? Math.floor(movie.runtime / 60) + 'h ' + (movie.runtime % 60) + 'm' : '';
+  var metaText = movie.year + '  \u00B7  ' + (rt ? rt + '  \u00B7  ' : '') + '\u2605 ' + movie.rating + '/5';
+  roundRect(ctx, pad, y, innerW, 30, 8);
+  ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.font = '500 ' + Math.round(13 * S) + 'px sans-serif';
+  ctx.fillText(metaText, pad + 12, y + 7);
+  y += 42;
 
-  // === SUBGENRE PILL ===
-  var tierLabel = tiers.find(function(t){return t.key===movie.tier;});
-  var genreText = tierLabel ? tierLabel.label : movie.tier;
-  ctx.font = '600 ' + Math.round(12 * S) + 'px sans-serif';
-  var pillW = ctx.measureText(genreText).width + 24;
-  roundRect(ctx, pad, yP, pillW, 26, 13);
-  ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1; ctx.stroke();
+  // === GENRE PILL ===
+  var tierLabel = tiers.find(function(t) { return t.key === movie.tier; });
+  var genreText = (tierLabel ? tierLabel.label : '').toUpperCase();
+  ctx.font = '700 ' + Math.round(10 * S) + 'px sans-serif';
+  var pw = ctx.measureText(genreText).width + 20;
+  roundRect(ctx, pad, y, pw, 22, 11);
+  ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.fillText(genreText, pad + 10, y + 6);
+  y += 36;
+
+  // === SYNOPSIS — 3 lines, clean ===
   ctx.fillStyle = 'rgba(255,255,255,0.5)';
-  ctx.fillText(genreText, pad + 12, yP + 8);
-  yP += 42;
-
-  // === SYNOPSIS — 3 lines max, truncated ===
-  ctx.fillStyle = 'rgba(255,255,255,0.55)';
-  ctx.font = '400 ' + Math.round(16 * S) + 'px sans-serif';
-  var synWords = (movie.synopsis || '').split(' '), synLine = '', synLines = 0, lh = 28;
-  for (var w = 0; w < synWords.length && synLines < 3; w++) {
-    var test = synLine + synWords[w] + ' ';
-    if (ctx.measureText(test).width > innerW && synLine) {
-      ctx.fillText(synLine.trim(), pad, yP); yP += lh; synLines++; synLine = synWords[w] + ' ';
-    } else { synLine = test; }
+  ctx.font = '400 ' + Math.round(14.5 * S) + 'px sans-serif';
+  var synWords = (movie.synopsis || '').split(' '), sl = '', sLines = 0, slh = 26;
+  for (var w = 0; w < synWords.length && sLines < 3; w++) {
+    var test = sl + synWords[w] + ' ';
+    if (ctx.measureText(test).width > innerW && sl) {
+      ctx.fillText(sl.trim(), pad, y); y += slh; sLines++; sl = synWords[w] + ' ';
+    } else sl = test;
   }
-  if (synLine && synLines < 3) {
-    if (synLines === 2 && w < synWords.length) synLine = synLine.trim().slice(0,-3) + '...';
-    ctx.fillText(synLine.trim(), pad, yP); yP += lh;
+  if (sl && sLines < 3) {
+    if (sLines === 2 && w < synWords.length) sl = sl.trim().slice(0, -3) + '...';
+    ctx.fillText(sl.trim(), pad, y); y += slh;
   }
-  yP += 12;
+  y += 14;
 
-  // === QUOTE CARDS — frosted glass mini panels ===
-  function drawQuoteCard(text, yStart) {
-    if (!text) return yStart;
-    var qPad = 14, qMaxW = innerW - qPad * 2 - 20;
-    var shortText = text.substring(0, 90);
-
-    // Measure height needed
-    ctx.font = 'italic ' + Math.round(13 * S) + 'px sans-serif';
-    var qWords = shortText.split(' '), qLine = '', qLines = [];
-    for (var i = 0; i < qWords.length; i++) {
-      var t = qLine + qWords[i] + ' ';
-      if (ctx.measureText(t).width > qMaxW && qLine) { qLines.push(qLine.trim()); qLine = qWords[i] + ' '; }
-      else qLine = t;
+  // === QUOTE CARDS — two frosted glass panels ===
+  function drawQuote(text, yStart) {
+    if (!text || yStart > CANVAS_H - 140) return yStart;
+    var qPad = 14;
+    ctx.font = 'italic ' + Math.round(12.5 * S) + 'px sans-serif';
+    var short = text.substring(0, 80);
+    var qw = short.split(' '), ql = '', qLines = [];
+    for (var i = 0; i < qw.length; i++) {
+      var t = ql + qw[i] + ' ';
+      if (ctx.measureText(t).width > innerW - qPad * 2 - 28 && ql) { qLines.push(ql.trim()); ql = qw[i] + ' '; }
+      else ql = t;
     }
-    if (qLine) qLines.push(qLine.trim());
-    if (qLines.length > 2) { qLines = qLines.slice(0,2); qLines[1] = qLines[1].slice(0,-3) + '...'; }
+    if (ql) qLines.push(ql.trim());
+    if (qLines.length > 2) { qLines = qLines.slice(0, 2); qLines[1] = qLines[1].slice(0, -3) + '...'; }
+    var ch = qLines.length * 22 + qPad * 2;
 
-    var cardH = qLines.length * 24 + qPad * 2 + 8;
+    // Glass panel
+    roundRect(ctx, pad, yStart, innerW, ch, 10);
+    ctx.fillStyle = 'rgba(255,255,255,0.03)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 0.5; ctx.stroke();
 
-    // Glass panel background
-    roundRect(ctx, pad, yStart, innerW, cardH, 12);
-    ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 1; ctx.stroke();
+    // Big quote mark
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.font = '700 ' + Math.round(30 * S) + 'px Georgia, serif';
+    ctx.fillText('\u201C', pad + 10, yStart + qPad + 2);
 
-    // Quote mark
-    ctx.fillStyle = 'rgba(255,255,255,0.12)';
-    ctx.font = '700 ' + Math.round(28 * S) + 'px serif';
-    ctx.fillText('\u201C', pad + qPad, yStart + qPad + 6);
-
-    // Quote text
-    ctx.fillStyle = 'rgba(255,255,255,0.45)';
-    ctx.font = 'italic ' + Math.round(13 * S) + 'px sans-serif';
-    for (var j = 0; j < qLines.length; j++) {
-      ctx.fillText(qLines[j], pad + qPad + 22, yStart + qPad + 10 + j * 24);
-    }
-
-    return yStart + cardH + 8;
+    // Text
+    ctx.fillStyle = 'rgba(255,255,255,0.38)';
+    ctx.font = 'italic ' + Math.round(12.5 * S) + 'px sans-serif';
+    for (var j = 0; j < qLines.length; j++) ctx.fillText(qLines[j], pad + qPad + 24, yStart + qPad + 6 + j * 22);
+    return yStart + ch + 8;
   }
 
-  yP = drawQuoteCard(movie.q1, yP);
-  yP = drawQuoteCard(movie.q5, yP);
+  y = drawQuote(movie.q1, y);
+  y = drawQuote(movie.q5, y);
 
-  // === 5-STAR RATING ===
-  var starsY = CANVAS_H - 110;
+  // === BOTTOM SECTION — fixed position from bottom ===
+  var bottomY = CANVAS_H - 94;
+
+  // 5-star rating
   var userR = ratings[movie.id] || 0;
-  var starSize = Math.round(22 * S);
-  var starGap = 38;
-  var starsStartX = pad;
+  var starSize = Math.round(20 * S);
   ctx.font = starSize + 'px sans-serif';
   for (var s = 0; s < 5; s++) {
-    ctx.fillStyle = s < userR ? '#c0a060' : 'rgba(255,255,255,0.15)';
-    ctx.fillText(s < userR ? '\u2605' : '\u2606', starsStartX + s * starGap, starsY);
+    ctx.fillStyle = s < userR ? '#d4a84a' : 'rgba(255,255,255,0.1)';
+    ctx.fillText(s < userR ? '\u2605' : '\u2606', pad + s * 34, bottomY);
   }
 
-  // === ACTION BUTTONS — 3 frosted glass circles ===
-  var btnY = starsY - 6;
-  var btnR = 18;
-  var btnStartX = CANVAS_W - pad - btnR * 2 * 3 - 12 * 2;
-  var btns = [
-    { icon: '\u2665', color: 'rgba(220,80,80,0.7)' },  // heart
-    { icon: '\u2606', color: 'rgba(200,180,100,0.7)' }, // bookmark/save
-    { icon: '\u2715', color: 'rgba(255,255,255,0.4)' }  // DNF
+  // Action buttons — three frosted circles
+  var btnR = 16;
+  var btnIcons = [
+    { ch: '\u2665', col: 'rgba(220,80,80,0.8)' },
+    { ch: '\u2606', col: 'rgba(220,200,100,0.7)' },
+    { ch: '\u2715', col: 'rgba(255,255,255,0.35)' }
   ];
-  btns.forEach(function(b, i) {
-    var cx = btnStartX + i * (btnR * 2 + 12) + btnR;
-    // Glass circle
-    ctx.beginPath(); ctx.arc(cx, btnY, btnR, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1; ctx.stroke();
-    // Icon
-    ctx.fillStyle = b.color;
-    ctx.font = Math.round(18 * S) + 'px sans-serif';
+  var bx = CANVAS_W - pad - btnR;
+  for (var b = btnIcons.length - 1; b >= 0; b--) {
+    ctx.beginPath(); ctx.arc(bx, bottomY + 4, btnR, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = btnIcons[b].col;
+    ctx.font = Math.round(16 * S) + 'px sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(b.icon, cx, btnY);
+    ctx.fillText(btnIcons[b].ch, bx, bottomY + 4);
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  });
+    bx -= (btnR * 2 + 10);
+  }
 
-  // === STREAMING LOGOS — bottom row ===
-  var streamY = CANVAS_H - 40;
-  ctx.fillStyle = 'rgba(255,255,255,0.2)';
-  ctx.font = '600 ' + Math.round(11 * S) + 'px sans-serif';
-  ctx.fillText('STREAM', pad, streamY);
-  var sX = pad + 80;
+  // Streaming row at very bottom
+  var stY = CANVAS_H - 38;
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.font = '600 ' + Math.round(10 * S) + 'px sans-serif';
+  ctx.fillText('STREAM', pad, stY);
+  var sx = pad + 72;
   (movie.streaming || []).forEach(function(name) {
-    // Dot + name
-    ctx.beginPath(); ctx.arc(sX, streamY + 5, 5, 0, Math.PI * 2);
-    ctx.fillStyle = streamColors[name] || '#555'; ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.font = Math.round(12 * S) + 'px sans-serif';
-    ctx.fillText(name, sX + 10, streamY - 2);
-    sX += ctx.measureText(name).width + 28;
+    ctx.beginPath(); ctx.arc(sx, stY + 4, 4, 0, Math.PI * 2);
+    ctx.fillStyle = streamColors[name] || '#444'; ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.font = Math.round(11 * S) + 'px sans-serif';
+    ctx.fillText(name, sx + 8, stY - 1);
+    sx += ctx.measureText(name).width + 24;
   });
 
-  // === OUTER BORDER ===
-  ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth = 2;
-  roundRect(ctx, 2, 2, CANVAS_W - 4, CANVAS_H - 4, cr - 1); ctx.stroke();
-
-  // Inner top highlight
-  ctx.strokeStyle = 'rgba(255,255,255,0.03)'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(cr + 2, 3); ctx.lineTo(CANVAS_W - cr - 2, 3); ctx.stroke();
+  // Outer border
+  ctx.strokeStyle = 'rgba(255,255,255,0.03)'; ctx.lineWidth = 1.5;
+  roundRect(ctx, 1, 1, CANVAS_W - 2, CANVAS_H - 2, cr); ctx.stroke();
 
   ctx.restore();
   return new THREE.CanvasTexture(canvas);
@@ -629,36 +616,65 @@ function updateOpacity() {
 
 function updateCounter() {
   idx = listIdx;
+  var centerMovie = meshes[getCenterSlot()] ? meshes[getCenterSlot()].userData.movieIdx : listIdx;
   document.getElementById('counter').textContent = filtered.length ? (listIdx + 1) + ' / ' + filtered.length : '0';
 }
 
-// === SNAP NAVIGATION — rotate one slot, then shift window ===
+// === SNAP NAVIGATION — rotate one slot, swap ONLY the hidden backside tile ===
 function navigateWheel(dir) {
   // dir: +1 = next (swipe up), -1 = prev (swipe down)
   if (isAnimating || !filtered.length) return;
   isAnimating = true;
 
   // If center is flipped, flip back instantly
-  var centerMesh = meshes[0];
+  var centerSlot = getCenterSlot();
+  var centerMesh = meshes[centerSlot];
   if (centerMesh && centerMesh.userData.flipped) {
     centerMesh.userData.flipped = false;
     if (centerMesh.userData.frontTex) { centerMesh.material.map = centerMesh.userData.frontTex; centerMesh.material.needsUpdate = true; }
     centerMesh.rotation.y = 0;
   }
 
-  // Animate one ANGLE_STEP rotation
-  var targetRot = group.rotation.x + dir * ANGLE_STEP;
+  // Animate one ANGLE_STEP rotation (negate: positive dir = bring next slot INTO view)
+  var targetRot = group.rotation.x - dir * ANGLE_STEP;
 
   gsap.to(group.rotation, {
     x: targetRot,
     duration: 0.4,
-    ease: 'power2.out',
+    ease: 'back.out(1.7)',
+    overwrite: true,
+    force3D: true,
     onComplete: function() {
-      // Shift the list position
+      // Update list position
       listIdx = ((listIdx + dir) % filtered.length + filtered.length) % filtered.length;
-      // Reset wheel to 0 and reload textures for new window
-      group.rotation.x = 0;
-      loadWindowTextures();
+
+      // Only swap the tile that just went to the FAR BACK of the cylinder.
+      // When moving forward (dir=+1), the tile that was behind center (dir's tail)
+      // is now the furthest back — replace it with the new edge movie.
+      var half = Math.floor(NUM_TILES / 2);
+      // The slot that is now at the back: it's the one half-way around from new center
+      var newCenterSlot = getCenterSlot();
+      // The tail slot (opposite side of where we're heading)
+      var tailSlot = (newCenterSlot + (dir > 0 ? -half : half) + NUM_TILES) % NUM_TILES;
+      // The movie that should be on that tail slot
+      var tailOffset = dir > 0 ? -half : half;
+      var tailMovieIdx = ((listIdx + tailOffset) % filtered.length + filtered.length) % filtered.length;
+
+      // Swap only that one mesh's texture (it's behind the cylinder, invisible)
+      var mesh = meshes[tailSlot];
+      mesh.userData.movieIdx = tailMovieIdx;
+      mesh.userData.flipped = false;
+      mesh.userData.backTex = null;
+      mesh.rotation.y = 0;
+      (function(m, movie) {
+        createPosterTexture(movie, function(tex) {
+          m.userData.frontTex = tex;
+          m.material.map = tex;
+          m.material.color.set(0xffffff);
+          m.material.needsUpdate = true;
+        });
+      })(mesh, filtered[tailMovieIdx]);
+
       isAnimating = false;
       updateCounter();
     }
@@ -669,30 +685,34 @@ function navigateWheel(dir) {
   document.getElementById('counter').textContent = (nextIdx + 1) + ' / ' + filtered.length;
 }
 
-// === FLIP CENTER TILE (always slot 0) ===
+// Get which slot index is currently at center (facing camera)
+function getCenterSlot() {
+  var TWO_PI = Math.PI * 2;
+  var bestSlot = 0, bestFacing = -2;
+  for (var i = 0; i < NUM_TILES; i++) {
+    var a = (i * ANGLE_STEP + group.rotation.x) % TWO_PI;
+    if (a < 0) a += TWO_PI;
+    var facing = Math.cos(a);
+    if (facing > bestFacing) { bestFacing = facing; bestSlot = i; }
+  }
+  return bestSlot;
+}
+
+// === FLIP CENTER TILE — GSAP timeline with midpoint texture swap ===
 function flipCenterTile() {
   if (isFlipping || isAnimating) return;
-  var mesh = meshes[0]; // slot 0 = center
+  var mesh = meshes[getCenterSlot()];
   if (!mesh) return;
   isFlipping = true;
   var wasFlipped = mesh.userData.flipped;
   if (!wasFlipped && !mesh.userData.backTex) {
     mesh.userData.backTex = createBackTexture(filtered[listIdx]);
   }
-  var midDone = false;
-  gsap.to(mesh.rotation, {
-    y: wasFlipped ? 0 : Math.PI,
-    duration: 0.4,
-    ease: 'power2.inOut',
-    onUpdate: function() {
-      if (!midDone && Math.abs(mesh.rotation.y - Math.PI/2) < 0.2) {
-        midDone = true;
-        mesh.material.map = wasFlipped ? mesh.userData.frontTex : mesh.userData.backTex;
-        mesh.material.needsUpdate = true;
-      }
-    },
-    onComplete: function() { mesh.userData.flipped = !wasFlipped; isFlipping = false; }
-  });
+  var targetTex = wasFlipped ? mesh.userData.frontTex : mesh.userData.backTex;
+  var tl = gsap.timeline({ onComplete: function() { mesh.userData.flipped = !wasFlipped; isFlipping = false; } });
+  tl.to(mesh.rotation, { y: wasFlipped ? Math.PI/2 : Math.PI/2, duration: 0.2, ease: 'power2.in', force3D: true })
+    .call(function() { mesh.material.map = targetTex; mesh.material.needsUpdate = true; })
+    .to(mesh.rotation, { y: wasFlipped ? 0 : Math.PI, duration: 0.2, ease: 'power2.out', force3D: true });
 }
 
 // === ANIMATION LOOP (render only, no velocity) ===
@@ -784,26 +804,19 @@ function swipeAction(action) {
   }
 }
 
-// === SHUFFLE — spin wheel fast, land on random movie ===
+// === SHUFFLE — rapid sequential navigations ===
 document.getElementById('shuffleBtn').addEventListener('click', function() {
   if (!filtered.length || isAnimating) return;
-  isAnimating = true;
-  var target = Math.floor(Math.random() * filtered.length);
-  // Spin 2-3 full rotations for visual effect
-  var spins = 2 + Math.floor(Math.random() * 2);
-  var totalSteps = spins * NUM_TILES;
-  gsap.to(group.rotation, {
-    x: group.rotation.x + totalSteps * ANGLE_STEP,
-    duration: 1.2,
-    ease: 'power2.inOut',
-    onComplete: function() {
-      listIdx = target;
-      group.rotation.x = 0;
-      loadWindowTextures();
-      isAnimating = false;
-      updateCounter();
-    }
-  });
+  var steps = 5 + Math.floor(Math.random() * 8);
+  var step = 0;
+  function tick() {
+    if (step >= steps) return;
+    navigateWheel(1);
+    step++;
+    var delay = 80 + step * step * 6;
+    setTimeout(tick, delay);
+  }
+  tick();
 });
 
 // === INTRO ===
