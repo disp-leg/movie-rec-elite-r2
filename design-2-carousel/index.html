@@ -410,10 +410,10 @@ function createBackTexture(movie) {
 
   // === QUOTE CARDS — two frosted glass panels ===
   function drawQuote(text, yStart) {
-    if (!text || yStart > CANVAS_H - 140) return yStart;
-    var qPad = 14;
-    ctx.font = 'italic ' + Math.round(12.5 * S) + 'px sans-serif';
-    var short = text.substring(0, 80);
+    if (!text || yStart > CANVAS_H - 130) return yStart;
+    var qPad = 12;
+    ctx.font = 'italic ' + Math.round(12 * S) + 'px sans-serif';
+    var short = text.substring(0, 70);
     var qw = short.split(' '), ql = '', qLines = [];
     for (var i = 0; i < qw.length; i++) {
       var t = ql + qw[i] + ' ';
@@ -441,8 +441,9 @@ function createBackTexture(movie) {
     return yStart + ch + 8;
   }
 
-  y = drawQuote(movie.q1, y);
-  y = drawQuote(movie.q5, y);
+  // Only draw quotes if there's room (bottom section starts at CANVAS_H - 94)
+  if (y < CANVAS_H - 220) y = drawQuote(movie.q1, y);
+  if (y < CANVAS_H - 140) y = drawQuote(movie.q5, y);
 
   // === BOTTOM SECTION — fixed position from bottom ===
   var bottomY = CANVAS_H - 94;
@@ -635,15 +636,15 @@ function navigateWheel(dir) {
     centerMesh.rotation.y = 0;
   }
 
-  // Animate one ANGLE_STEP rotation (negate: positive dir = bring next slot INTO view)
-  var targetRot = group.rotation.x - dir * ANGLE_STEP;
+  // Positive rotation = tiles from below rise up (swipe up = next)
+  var targetRot = group.rotation.x + dir * ANGLE_STEP;
 
   gsap.to(group.rotation, {
     x: targetRot,
     duration: 0.4,
     ease: 'back.out(1.7)',
     overwrite: true,
-    force3D: true,
+
     onComplete: function() {
       // Update list position
       listIdx = ((listIdx + dir) % filtered.length + filtered.length) % filtered.length;
@@ -655,9 +656,9 @@ function navigateWheel(dir) {
       // The slot that is now at the back: it's the one half-way around from new center
       var newCenterSlot = getCenterSlot();
       // The tail slot (opposite side of where we're heading)
-      var tailSlot = (newCenterSlot + (dir > 0 ? -half : half) + NUM_TILES) % NUM_TILES;
+      var tailSlot = (newCenterSlot + (dir > 0 ? half : -half) + NUM_TILES) % NUM_TILES;
       // The movie that should be on that tail slot
-      var tailOffset = dir > 0 ? -half : half;
+      var tailOffset = dir > 0 ? half : -half;
       var tailMovieIdx = ((listIdx + tailOffset) % filtered.length + filtered.length) % filtered.length;
 
       // Swap only that one mesh's texture (it's behind the cylinder, invisible)
@@ -807,16 +808,25 @@ function swipeAction(action) {
 // === SHUFFLE — rapid sequential navigations ===
 document.getElementById('shuffleBtn').addEventListener('click', function() {
   if (!filtered.length || isAnimating) return;
-  var steps = 5 + Math.floor(Math.random() * 8);
-  var step = 0;
-  function tick() {
-    if (step >= steps) return;
-    navigateWheel(1);
-    step++;
-    var delay = 80 + step * step * 6;
-    setTimeout(tick, delay);
-  }
-  tick();
+  // Jump to a random movie — rebuild window at random position
+  isAnimating = true;
+  var target = Math.floor(Math.random() * filtered.length);
+  // Spin the wheel 2 full rotations for visual flair, then snap
+  var spinAmount = (2 + Math.random()) * Math.PI * 2;
+  gsap.to(group.rotation, {
+    x: group.rotation.x + spinAmount,
+    duration: 1.0,
+    ease: 'power2.inOut',
+
+    onComplete: function() {
+      // Land on the random movie
+      listIdx = target;
+      group.rotation.x = 0;
+      loadWindowTextures();
+      isAnimating = false;
+      updateCounter();
+    }
+  });
 });
 
 // === INTRO ===
