@@ -488,13 +488,25 @@ function pickPunchyQuote(text, charLimit) {
   return sorted[0];
 }
 
-// Condense synopsis to 2-3 short sentences
+// Condense synopsis to 2-3 complete sentences — never cut mid-word
 function condenseSynopsis(text) {
   if (!text) return '';
-  var clean = text.replace(/<[^>]+>/g, '');
+  var clean = text.replace(/<[^>]+>/g, '').trim();
+  // Extract only complete sentences (ending with . ! or ?)
   var sentences = clean.match(/[^.!?]+[.!?]+/g);
-  if (!sentences || sentences.length <= 3) return clean;
-  // Take first 2-3 sentences that fit reasonably
+  if (!sentences || !sentences.length) {
+    // No complete sentences — cut at last natural break (comma, semicolon, dash)
+    var breakPoints = [clean.lastIndexOf(', '), clean.lastIndexOf('; '), clean.lastIndexOf(' — '), clean.lastIndexOf(' - ')];
+    var bestBreak = -1;
+    for (var b = 0; b < breakPoints.length; b++) {
+      if (breakPoints[b] > bestBreak) bestBreak = breakPoints[b];
+    }
+    if (bestBreak > clean.length * 0.4) return clean.slice(0, bestBreak);
+    // Fallback: cut at last space
+    var lastSpace = clean.lastIndexOf(' ');
+    return lastSpace > 20 ? clean.slice(0, lastSpace) : clean;
+  }
+  // Take first 2-3 complete sentences only — discard trailing fragments
   var result = '';
   for (var i = 0; i < Math.min(3, sentences.length); i++) {
     result += sentences[i].trim() + ' ';
