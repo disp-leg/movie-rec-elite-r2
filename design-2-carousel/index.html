@@ -439,7 +439,12 @@ function pickPunchyQuote(text, charLimit) {
   var clean = text.replace(/<[^>]+>/g, '');
   // Split into sentences
   var sentences = clean.match(/[^.!?]+[.!?]+/g);
-  if (!sentences || !sentences.length) return clean.length <= charLimit ? clean : '';
+  if (!sentences || !sentences.length) {
+    if (clean.length <= charLimit) return clean;
+    var cut = clean.slice(0, charLimit);
+    var sp = cut.lastIndexOf(' ');
+    return sp > 20 ? cut.slice(0, sp) : cut;
+  }
   // Filter to sentences under charLimit, pick shortest
   var candidates = [];
   for (var i = 0; i < sentences.length; i++) {
@@ -447,13 +452,11 @@ function pickPunchyQuote(text, charLimit) {
     if (s.length > 0 && s.length <= charLimit) candidates.push(s);
   }
   if (!candidates.length) {
-    // No sentence fits under limit — try splitting longest at commas
-    var longest = sentences[0].trim();
-    var clauses = longest.split(/,\s*/);
-    for (var c = 0; c < clauses.length; c++) {
-      if (clauses[c].length > 0 && clauses[c].length <= charLimit) return clauses[c].trim();
-    }
-    return '';
+    // No sentence fits under limit — cut at last word boundary before charLimit
+    var trimmed = clean.slice(0, charLimit);
+    var lastSpace = trimmed.lastIndexOf(' ');
+    if (lastSpace > 20) trimmed = trimmed.slice(0, lastSpace);
+    return trimmed;
   }
   // Among candidates, prefer shorter ones (punchier)
   candidates.sort(function(a, b) { return a.length - b.length; });
@@ -631,7 +634,7 @@ function createBackTexture(movie) {
   // === TWO FROSTED GLASS QUOTE CARDS — pick punchiest short quote ===
   var q1Text = pickPunchyQuote(movie.q1, 100);
   var q5Text = pickPunchyQuote(movie.q5, 100);
-  if (q5Text === q1Text) q5Text = '';
+  // Always show both quotes even if identical — different star ratings distinguish them
   var bottomPinY = CANVAS_H - G * 13;
   if (q1Text) {
     y = drawFrostedQuoteCard(ctx, q1Text, P, y, W, G, bottomPinY, 1, '#ef4444');
