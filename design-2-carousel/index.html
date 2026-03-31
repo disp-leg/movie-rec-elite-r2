@@ -280,58 +280,94 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-// === POSTER TEXTURE ===
+// === POSTER TEXTURE — with robust fallback ===
+function drawFallbackPoster(ctx, movie, cr) {
+  ctx.save();
+  roundRect(ctx, 0, 0, CANVAS_W, CANVAS_H, cr); ctx.clip();
+  // Rich gradient background
+  var g = ctx.createLinearGradient(0, 0, CANVAS_W * 0.3, CANVAS_H);
+  g.addColorStop(0, '#1a1828'); g.addColorStop(0.5, '#12111e'); g.addColorStop(1, '#0a0916');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+  // Subtle grid pattern
+  ctx.strokeStyle = 'rgba(255,255,255,0.02)'; ctx.lineWidth = 1;
+  for (var i = 0; i < CANVAS_H; i += 40) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(CANVAS_W,i); ctx.stroke(); }
+  // Title
+  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  ctx.font = 'bold ' + Math.round(24 * TEXTURE_SCALE) + 'px sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  var title = movie.title;
+  if (ctx.measureText(title).width > CANVAS_W - 60) {
+    while (ctx.measureText(title + '...').width > CANVAS_W - 60 && title.length > 5) title = title.slice(0,-1);
+    title += '...';
+  }
+  ctx.fillText(title, CANVAS_W/2, CANVAS_H/2 - 20);
+  // Year + rating
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.font = Math.round(16 * TEXTURE_SCALE) + 'px sans-serif';
+  ctx.fillText(movie.year + '  \u2022  \u2605 ' + movie.rating, CANVAS_W/2, CANVAS_H/2 + 20);
+  // Border
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth = 2;
+  roundRect(ctx, 2, 2, CANVAS_W-4, CANVAS_H-4, cr-1); ctx.stroke();
+  ctx.restore();
+}
+
 function createPosterTexture(movie, callback) {
   var canvas = document.createElement('canvas');
   canvas.width = CANVAS_W; canvas.height = CANVAS_H;
   var ctx = canvas.getContext('2d');
   var cr = 20;
+  var loaded = false;
 
-  var img = new Image();
-  img.crossOrigin = 'anonymous';
-  img.onload = function() {
+  function drawPoster(img) {
     ctx.save();
-    roundRect(ctx, 0, 0, CANVAS_W, CANVAS_H, cr);
-    ctx.clip();
-    // Cover-fit
+    roundRect(ctx, 0, 0, CANVAS_W, CANVAS_H, cr); ctx.clip();
     var a = img.width/img.height, ca = CANVAS_W/CANVAS_H;
     var sw,sh,sx,sy;
     if (a > ca) { sh=img.height; sw=sh*ca; sx=(img.width-sw)/2; sy=0; }
     else { sw=img.width; sh=sw/ca; sx=0; sy=(img.height-sh)/2; }
-    ctx.drawImage(img, sx,sy,sw,sh, 0,0,CANVAS_W,CANVAS_H);
+    try { ctx.drawImage(img, sx,sy,sw,sh, 0,0,CANVAS_W,CANVAS_H); } catch(e) {}
     // Bottom overlay
-    var oh = CANVAS_H * 0.13;
+    var oh = CANVAS_H * 0.14;
     var g = ctx.createLinearGradient(0, CANVAS_H-oh, 0, CANVAS_H);
-    g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(0.4,'rgba(0,0,0,0.5)'); g.addColorStop(1,'rgba(0,0,0,0.75)');
+    g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(0.3,'rgba(0,0,0,0.4)'); g.addColorStop(1,'rgba(0,0,0,0.8)');
     ctx.fillStyle = g; ctx.fillRect(0, CANVAS_H-oh, CANVAS_W, oh);
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    ctx.font = '600 '+Math.round(22*TEXTURE_SCALE)+'px sans-serif';
+    // Year
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.font = '600 '+Math.round(20*TEXTURE_SCALE)+'px sans-serif';
     ctx.textBaseline = 'bottom';
     ctx.fillText(String(movie.year), 20, CANVAS_H-14);
+    // Streaming dots
     var dotX = CANVAS_W - 20;
     (movie.streaming||[]).slice().reverse().forEach(function(s) {
-      ctx.beginPath(); ctx.arc(dotX, CANVAS_H-24, 7, 0, Math.PI*2);
-      ctx.fillStyle = streamColors[s] || '#888'; ctx.fill(); dotX -= 20;
+      ctx.beginPath(); ctx.arc(dotX, CANVAS_H-24, 6, 0, Math.PI*2);
+      ctx.fillStyle = streamColors[s] || '#888'; ctx.fill(); dotX -= 18;
     });
-    // Border
-    ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 2;
-    roundRect(ctx,2,2,CANVAS_W-4,CANVAS_H-4,cr-1); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 1.5;
+    roundRect(ctx,1,1,CANVAS_W-2,CANVAS_H-2,cr); ctx.stroke();
     ctx.restore();
     callback(new THREE.CanvasTexture(canvas));
-  };
+  }
+
+  function useFallback() {
+    if (loaded) return; loaded = true;
+    drawFallbackPoster(ctx, movie, cr);
+    callback(new THREE.CanvasTexture(canvas));
+  }
+
+  // Try loading with crossOrigin first (works on GitHub Pages)
+  var img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = function() { if (!loaded) { loaded = true; drawPoster(img); } };
   img.onerror = function() {
-    // Fallback
-    ctx.save(); roundRect(ctx,0,0,CANVAS_W,CANVAS_H,cr); ctx.clip();
-    var g=ctx.createLinearGradient(0,0,0,CANVAS_H);
-    g.addColorStop(0,'#2a2a3a'); g.addColorStop(1,'#0a0a1a');
-    ctx.fillStyle=g; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
-    ctx.fillStyle='#fff'; ctx.font='bold '+Math.round(28*TEXTURE_SCALE)+'px sans-serif';
-    ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText(movie.title, CANVAS_W/2, CANVAS_H/2);
-    ctx.restore();
-    callback(new THREE.CanvasTexture(canvas));
+    // Retry WITHOUT crossOrigin (some CDNs reject it)
+    var img2 = new Image();
+    img2.onload = function() { if (!loaded) { loaded = true; drawPoster(img2); } };
+    img2.onerror = useFallback;
+    img2.src = movie.poster;
   };
   img.src = movie.poster;
+  // Timeout fallback after 6 seconds
+  setTimeout(useFallback, 6000);
 }
 
 // === BACK TEXTURE ===
@@ -339,162 +375,145 @@ function createBackTexture(movie) {
   var canvas = document.createElement('canvas');
   canvas.width = CANVAS_W; canvas.height = CANVAS_H;
   var ctx = canvas.getContext('2d');
-  var cr = 20;
-  var S = TEXTURE_SCALE;
-  var pad = 30;
-  var innerW = CANVAS_W - pad * 2;
+  var cr = 20; var S = TEXTURE_SCALE; var P = 32; var W = CANVAS_W - P*2;
 
   ctx.save();
   ctx.translate(CANVAS_W, 0); ctx.scale(-1, 1);
   roundRect(ctx, 0, 0, CANVAS_W, CANVAS_H, cr); ctx.clip();
 
-  // === DARK MATTE BACKGROUND ===
-  var bg = ctx.createLinearGradient(0, 0, 0, CANVAS_H);
-  bg.addColorStop(0, '#0f0e14'); bg.addColorStop(1, '#0a0912');
-  ctx.fillStyle = bg; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+  // === BG: deep black with ultra-subtle warm gradient ===
+  ctx.fillStyle = '#0c0b10';
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+  var warm = ctx.createRadialGradient(CANVAS_W*0.3, CANVAS_H*0.2, 0, CANVAS_W*0.3, CANVAS_H*0.2, CANVAS_H*0.6);
+  warm.addColorStop(0, 'rgba(40,30,20,0.15)'); warm.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = warm; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
-  // Subtle top highlight line
-  var hl = ctx.createLinearGradient(pad, 0, CANVAS_W - pad, 0);
-  hl.addColorStop(0, 'rgba(255,255,255,0)'); hl.addColorStop(0.5, 'rgba(255,255,255,0.06)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = hl; ctx.fillRect(pad, cr, innerW, 1);
-
-  var y = pad + 14;
+  var y = P;
 
   // === TITLE ===
-  ctx.fillStyle = '#eeeae4';
-  ctx.font = '700 ' + Math.round(26 * S) + 'px sans-serif';
+  ctx.fillStyle = '#f2efe9';
+  ctx.font = '700 ' + Math.round(24*S) + 'px sans-serif';
   ctx.textBaseline = 'top';
-  var title = movie.title;
-  while (ctx.measureText(title).width > innerW - 10 && title.length > 8) title = title.slice(0, -1);
-  if (title !== movie.title) title += '...';
-  ctx.fillText(title, pad, y);
-  y += 44;
+  var t = movie.title;
+  while (ctx.measureText(t).width > W && t.length > 8) t = t.slice(0,-1);
+  if (t !== movie.title) t += '\u2026';
+  ctx.fillText(t, P, y);
+  y += 38;
 
-  // === META — frosted glass bar ===
-  var rt = movie.runtime ? Math.floor(movie.runtime / 60) + 'h ' + (movie.runtime % 60) + 'm' : '';
-  var metaText = movie.year + '  \u00B7  ' + (rt ? rt + '  \u00B7  ' : '') + '\u2605 ' + movie.rating + '/5';
-  roundRect(ctx, pad, y, innerW, 30, 8);
-  ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.4)';
-  ctx.font = '500 ' + Math.round(13 * S) + 'px sans-serif';
-  ctx.fillText(metaText, pad + 12, y + 7);
-  y += 42;
+  // === META ROW: year, runtime, rating ===
+  var rt = movie.runtime ? Math.floor(movie.runtime/60) + 'h ' + (movie.runtime%60) + 'm' : '';
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.font = '500 ' + Math.round(13*S) + 'px sans-serif';
+  ctx.fillText(movie.year + (rt ? '   ' + rt : '') + '   \u2605 ' + movie.rating, P, y);
+  y += 28;
 
-  // === GENRE PILL ===
-  var tierLabel = tiers.find(function(t) { return t.key === movie.tier; });
-  var genreText = (tierLabel ? tierLabel.label : '').toUpperCase();
-  ctx.font = '700 ' + Math.round(10 * S) + 'px sans-serif';
-  var pw = ctx.measureText(genreText).width + 20;
-  roundRect(ctx, pad, y, pw, 22, 11);
-  ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1; ctx.stroke();
-  ctx.fillStyle = 'rgba(255,255,255,0.45)';
-  ctx.fillText(genreText, pad + 10, y + 6);
-  y += 36;
-
-  // === SYNOPSIS — 3 lines, clean ===
-  ctx.fillStyle = 'rgba(255,255,255,0.5)';
-  ctx.font = '400 ' + Math.round(14.5 * S) + 'px sans-serif';
-  var synWords = (movie.synopsis || '').split(' '), sl = '', sLines = 0, slh = 26;
-  for (var w = 0; w < synWords.length && sLines < 3; w++) {
-    var test = sl + synWords[w] + ' ';
-    if (ctx.measureText(test).width > innerW && sl) {
-      ctx.fillText(sl.trim(), pad, y); y += slh; sLines++; sl = synWords[w] + ' ';
-    } else sl = test;
+  // === GENRE TAG ===
+  var tier = tiers.find(function(x){return x.key===movie.tier;});
+  var genre = tier ? tier.label.toUpperCase() : '';
+  if (genre) {
+    ctx.font = '700 ' + Math.round(9*S) + 'px sans-serif';
+    var gw = ctx.measureText(genre).width + 18;
+    roundRect(ctx, P, y, gw, 20, 10);
+    ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.fillText(genre, P+9, y+5);
+    y += 32;
   }
-  if (sl && sLines < 3) {
-    if (sLines === 2 && w < synWords.length) sl = sl.trim().slice(0, -3) + '...';
-    ctx.fillText(sl.trim(), pad, y); y += slh;
-  }
-  y += 14;
 
-  // === QUOTE CARDS — two frosted glass panels ===
-  function drawQuote(text, yStart) {
-    if (!text || yStart > CANVAS_H - 130) return yStart;
-    var qPad = 12;
-    ctx.font = 'italic ' + Math.round(12 * S) + 'px sans-serif';
-    var short = text.substring(0, 70);
-    var qw = short.split(' '), ql = '', qLines = [];
-    for (var i = 0; i < qw.length; i++) {
-      var t = ql + qw[i] + ' ';
-      if (ctx.measureText(t).width > innerW - qPad * 2 - 28 && ql) { qLines.push(ql.trim()); ql = qw[i] + ' '; }
-      else ql = t;
+  // === DIVIDER ===
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(P, y); ctx.lineTo(P+W, y); ctx.stroke();
+  y += 16;
+
+  // === SYNOPSIS: clean, 4 lines max ===
+  ctx.fillStyle = 'rgba(255,255,255,0.52)';
+  ctx.font = '400 ' + Math.round(14*S) + 'px sans-serif';
+  var sw = (movie.synopsis||'').split(' '), sl='', sn=0;
+  for (var i=0; i<sw.length && sn<4; i++) {
+    var test = sl + sw[i] + ' ';
+    if (ctx.measureText(test).width > W && sl) { ctx.fillText(sl.trim(),P,y); y+=24; sn++; sl=sw[i]+' '; }
+    else sl = test;
+  }
+  if (sl && sn<4) {
+    if (sn===3 && i<sw.length) sl=sl.trim().slice(0,-3)+'\u2026';
+    ctx.fillText(sl.trim(),P,y); y+=24;
+  }
+  y += 12;
+
+  // === REVIEW QUOTE (one, in a glass card) ===
+  var quote = movie.q1 || movie.q5 || '';
+  if (quote && y < CANVAS_H - 160) {
+    var qShort = quote.substring(0,100);
+    ctx.font = 'italic ' + Math.round(12*S) + 'px sans-serif';
+    var qw = qShort.split(' '), ql='', qArr=[];
+    for (var j=0; j<qw.length; j++) {
+      var qt = ql + qw[j] + ' ';
+      if (ctx.measureText(qt).width > W-40 && ql) { qArr.push(ql.trim()); ql=qw[j]+' '; }
+      else ql = qt;
     }
-    if (ql) qLines.push(ql.trim());
-    if (qLines.length > 2) { qLines = qLines.slice(0, 2); qLines[1] = qLines[1].slice(0, -3) + '...'; }
-    var ch = qLines.length * 22 + qPad * 2;
-
-    // Glass panel
-    roundRect(ctx, pad, yStart, innerW, ch, 10);
+    if (ql) qArr.push(ql.trim());
+    if (qArr.length > 2) { qArr=qArr.slice(0,2); qArr[1]=qArr[1].slice(0,-3)+'\u2026'; }
+    var qH = qArr.length * 22 + 24;
+    roundRect(ctx, P, y, W, qH, 10);
     ctx.fillStyle = 'rgba(255,255,255,0.03)'; ctx.fill();
     ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 0.5; ctx.stroke();
-
-    // Big quote mark
-    ctx.fillStyle = 'rgba(255,255,255,0.08)';
-    ctx.font = '700 ' + Math.round(30 * S) + 'px Georgia, serif';
-    ctx.fillText('\u201C', pad + 10, yStart + qPad + 2);
-
+    // Opening quote mark
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.font = '700 ' + Math.round(26*S) + 'px Georgia, serif';
+    ctx.fillText('\u201C', P+10, y+14);
     // Text
     ctx.fillStyle = 'rgba(255,255,255,0.38)';
-    ctx.font = 'italic ' + Math.round(12.5 * S) + 'px sans-serif';
-    for (var j = 0; j < qLines.length; j++) ctx.fillText(qLines[j], pad + qPad + 24, yStart + qPad + 6 + j * 22);
-    return yStart + ch + 8;
+    ctx.font = 'italic ' + Math.round(12*S) + 'px sans-serif';
+    for (var k=0; k<qArr.length; k++) ctx.fillText(qArr[k], P+30, y+16+k*22);
+    y += qH + 12;
   }
 
-  // Only draw quotes if there's room (bottom section starts at CANVAS_H - 94)
-  if (y < CANVAS_H - 220) y = drawQuote(movie.q1, y);
-  if (y < CANVAS_H - 140) y = drawQuote(movie.q5, y);
+  // === BOTTOM SECTION — pinned at bottom ===
+  var bY = CANVAS_H - 80;
 
-  // === BOTTOM SECTION — fixed position from bottom ===
-  var bottomY = CANVAS_H - 94;
-
-  // 5-star rating
-  var userR = ratings[movie.id] || 0;
-  var starSize = Math.round(20 * S);
-  ctx.font = starSize + 'px sans-serif';
-  for (var s = 0; s < 5; s++) {
-    ctx.fillStyle = s < userR ? '#d4a84a' : 'rgba(255,255,255,0.1)';
-    ctx.fillText(s < userR ? '\u2605' : '\u2606', pad + s * 34, bottomY);
+  // Stars
+  ctx.font = Math.round(19*S) + 'px sans-serif';
+  var uR = ratings[movie.id] || 0;
+  for (var s=0; s<5; s++) {
+    ctx.fillStyle = s<uR ? '#d4a84a' : 'rgba(255,255,255,0.1)';
+    ctx.fillText(s<uR ? '\u2605' : '\u2606', P + s*30, bY);
   }
 
-  // Action buttons — three frosted circles
-  var btnR = 16;
-  var btnIcons = [
-    { ch: '\u2665', col: 'rgba(220,80,80,0.8)' },
-    { ch: '\u2606', col: 'rgba(220,200,100,0.7)' },
-    { ch: '\u2715', col: 'rgba(255,255,255,0.35)' }
+  // Action icons — right side
+  var icons = [
+    {ch:'\u2665', c:'rgba(200,70,70,0.75)'},
+    {ch:'\u2606', c:'rgba(200,180,80,0.6)'},
+    {ch:'\u2715', c:'rgba(255,255,255,0.3)'}
   ];
-  var bx = CANVAS_W - pad - btnR;
-  for (var b = btnIcons.length - 1; b >= 0; b--) {
-    ctx.beginPath(); ctx.arc(bx, bottomY + 4, btnR, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1; ctx.stroke();
-    ctx.fillStyle = btnIcons[b].col;
-    ctx.font = Math.round(16 * S) + 'px sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(btnIcons[b].ch, bx, bottomY + 4);
-    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    bx -= (btnR * 2 + 10);
+  var bx = CANVAS_W - P;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (var b=icons.length-1; b>=0; b--) {
+    bx -= 15;
+    ctx.beginPath(); ctx.arc(bx, bY+4, 14, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = icons[b].c; ctx.font = Math.round(14*S)+'px sans-serif';
+    ctx.fillText(icons[b].ch, bx, bY+4);
+    bx -= 20;
   }
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
 
-  // Streaming row at very bottom
-  var stY = CANVAS_H - 38;
+  // Streaming at very bottom
+  var stY = CANVAS_H - 36;
   ctx.fillStyle = 'rgba(255,255,255,0.15)';
-  ctx.font = '600 ' + Math.round(10 * S) + 'px sans-serif';
-  ctx.fillText('STREAM', pad, stY);
-  var sx = pad + 72;
-  (movie.streaming || []).forEach(function(name) {
-    ctx.beginPath(); ctx.arc(sx, stY + 4, 4, 0, Math.PI * 2);
-    ctx.fillStyle = streamColors[name] || '#444'; ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
-    ctx.font = Math.round(11 * S) + 'px sans-serif';
-    ctx.fillText(name, sx + 8, stY - 1);
-    sx += ctx.measureText(name).width + 24;
+  ctx.font = '600 ' + Math.round(9*S) + 'px sans-serif';
+  var sx = P;
+  (movie.streaming||[]).forEach(function(name) {
+    ctx.beginPath(); ctx.arc(sx+3, stY+4, 3.5, 0, Math.PI*2);
+    ctx.fillStyle = streamColors[name]||'#444'; ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = Math.round(10*S)+'px sans-serif';
+    ctx.fillText(name, sx+10, stY);
+    sx += ctx.measureText(name).width + 22;
   });
 
-  // Outer border
-  ctx.strokeStyle = 'rgba(255,255,255,0.03)'; ctx.lineWidth = 1.5;
-  roundRect(ctx, 1, 1, CANVAS_W - 2, CANVAS_H - 2, cr); ctx.stroke();
+  // Outer glow border
+  ctx.strokeStyle = 'rgba(255,255,255,0.03)'; ctx.lineWidth = 1;
+  roundRect(ctx, 1, 1, CANVAS_W-2, CANVAS_H-2, cr); ctx.stroke();
 
   ctx.restore();
   return new THREE.CanvasTexture(canvas);
@@ -805,26 +824,26 @@ function swipeAction(action) {
   }
 }
 
-// === SHUFFLE — rapid sequential navigations ===
+// === SHUFFLE — jump to random movie ===
 document.getElementById('shuffleBtn').addEventListener('click', function() {
   if (!filtered.length || isAnimating) return;
-  // Jump to a random movie — rebuild window at random position
   isAnimating = true;
   var target = Math.floor(Math.random() * filtered.length);
-  // Spin the wheel 2 full rotations for visual flair, then snap
-  var spinAmount = (2 + Math.random()) * Math.PI * 2;
+  // Quick spin for visual flair
+  var spinAmount = (1 + Math.random()) * Math.PI * 2;
   gsap.to(group.rotation, {
     x: group.rotation.x + spinAmount,
-    duration: 1.0,
-    ease: 'power2.inOut',
-
+    duration: 0.8,
+    ease: 'power3.inOut',
+    overwrite: true,
     onComplete: function() {
-      // Land on the random movie
+      // Land on random movie — set position, reload, then hold lock
       listIdx = target;
       group.rotation.x = 0;
       loadWindowTextures();
-      isAnimating = false;
       updateCounter();
+      // Keep locked briefly so textures load before user can interact
+      setTimeout(function() { isAnimating = false; }, 300);
     }
   });
 });
