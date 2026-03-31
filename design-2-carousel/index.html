@@ -341,55 +341,173 @@ function createBackTexture(movie) {
   canvas.width = CANVAS_W; canvas.height = CANVAS_H;
   var ctx = canvas.getContext('2d');
   var cr = 20;
+  var S = TEXTURE_SCALE;
+  var pad = 28;
+  var innerW = CANVAS_W - pad * 2;
+
   ctx.save();
-  ctx.translate(CANVAS_W,0); ctx.scale(-1,1); // mirror for Y-flip
-  roundRect(ctx,0,0,CANVAS_W,CANVAS_H,cr); ctx.clip();
-  // Background
-  var bg=ctx.createLinearGradient(0,0,0,CANVAS_H);
-  bg.addColorStop(0,'#f4f1ec'); bg.addColorStop(0.5,'#ece9e3'); bg.addColorStop(1,'#e5e2dc');
-  ctx.fillStyle=bg; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
-  var pad=28, yP=pad+10, maxW=CANVAS_W-pad*2;
-  // Title
-  ctx.fillStyle='#3a3530'; ctx.font='bold '+Math.round(26*TEXTURE_SCALE)+'px sans-serif'; ctx.textBaseline='top';
-  ctx.fillText(movie.title, pad, yP); yP+=50;
-  // Meta
-  var rt=movie.runtime?Math.floor(movie.runtime/60)+'h '+(movie.runtime%60)+'m':'';
-  ctx.fillStyle='#7a756d'; ctx.font=Math.round(18*TEXTURE_SCALE)+'px sans-serif';
-  ctx.fillText(movie.year+(rt?' | '+rt:'')+' | '+movie.rating+'/5', pad, yP); yP+=40;
-  // Synopsis
-  ctx.fillStyle='#6b665e'; ctx.font=Math.round(17*TEXTURE_SCALE)+'px sans-serif';
-  var words=(movie.synopsis||'').split(' '), line='', lh=30;
-  for(var w=0;w<words.length&&yP<CANVAS_H-200;w++){
-    var test=line+words[w]+' ';
-    if(ctx.measureText(test).width>maxW&&line){ctx.fillText(line,pad,yP);yP+=lh;line=words[w]+' ';}
-    else line=test;
+  ctx.translate(CANVAS_W, 0); ctx.scale(-1, 1); // mirror for Y-flip
+
+  // === DARK BACKGROUND with subtle gradient ===
+  roundRect(ctx, 0, 0, CANVAS_W, CANVAS_H, cr); ctx.clip();
+  var bg = ctx.createLinearGradient(0, 0, 0, CANVAS_H);
+  bg.addColorStop(0, '#141318'); bg.addColorStop(0.5, '#111016'); bg.addColorStop(1, '#0d0c12');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+  // Subtle noise grain overlay
+  ctx.fillStyle = 'rgba(255,255,255,0.015)';
+  for (var n = 0; n < 200; n++) {
+    ctx.fillRect(Math.random()*CANVAS_W, Math.random()*CANVAS_H, 1, 1);
   }
-  if(line){ctx.fillText(line,pad,yP);yP+=lh+10;}
-  // Quotes
-  if(movie.q1&&yP<CANVAS_H-120){
-    ctx.fillStyle='#9a958d'; ctx.font='italic '+Math.round(15*TEXTURE_SCALE)+'px sans-serif';
-    var qw=movie.q1.substring(0,120).split(' '); line='';
-    for(var q=0;q<qw.length&&yP<CANVAS_H-80;q++){
-      var qt=line+qw[q]+' ';
-      if(ctx.measureText(qt).width>maxW&&line){ctx.fillText(line,pad,yP);yP+=26;line=qw[q]+' ';}
-      else line=qt;
+
+  var yP = pad + 5;
+
+  // === TITLE — large, white, tracked ===
+  ctx.fillStyle = '#f0ede8';
+  ctx.font = '700 ' + Math.round(28 * S) + 'px sans-serif';
+  ctx.textBaseline = 'top';
+  // Truncate title if too wide
+  var title = movie.title;
+  while (ctx.measureText(title).width > innerW && title.length > 10) title = title.slice(0,-1);
+  ctx.fillText(title, pad, yP);
+  yP += Math.round(36 * S / S) + 10;
+
+  // === META LINE — year | runtime | rating ===
+  var rt = movie.runtime ? Math.floor(movie.runtime/60) + 'h ' + (movie.runtime%60) + 'm' : '';
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.font = '500 ' + Math.round(15 * S) + 'px sans-serif';
+  ctx.fillText(movie.year + (rt ? '  \u00B7  ' + rt : '') + '  \u00B7  \u2605 ' + movie.rating, pad, yP);
+  yP += 32;
+
+  // === SUBGENRE PILL ===
+  var tierLabel = tiers.find(function(t){return t.key===movie.tier;});
+  var genreText = tierLabel ? tierLabel.label : movie.tier;
+  ctx.font = '600 ' + Math.round(12 * S) + 'px sans-serif';
+  var pillW = ctx.measureText(genreText).width + 24;
+  roundRect(ctx, pad, yP, pillW, 26, 13);
+  ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.fillText(genreText, pad + 12, yP + 8);
+  yP += 42;
+
+  // === SYNOPSIS — 3 lines max, truncated ===
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.font = '400 ' + Math.round(16 * S) + 'px sans-serif';
+  var synWords = (movie.synopsis || '').split(' '), synLine = '', synLines = 0, lh = 28;
+  for (var w = 0; w < synWords.length && synLines < 3; w++) {
+    var test = synLine + synWords[w] + ' ';
+    if (ctx.measureText(test).width > innerW && synLine) {
+      ctx.fillText(synLine.trim(), pad, yP); yP += lh; synLines++; synLine = synWords[w] + ' ';
+    } else { synLine = test; }
+  }
+  if (synLine && synLines < 3) {
+    if (synLines === 2 && w < synWords.length) synLine = synLine.trim().slice(0,-3) + '...';
+    ctx.fillText(synLine.trim(), pad, yP); yP += lh;
+  }
+  yP += 12;
+
+  // === QUOTE CARDS — frosted glass mini panels ===
+  function drawQuoteCard(text, yStart) {
+    if (!text) return yStart;
+    var qPad = 14, qMaxW = innerW - qPad * 2 - 20;
+    var shortText = text.substring(0, 90);
+
+    // Measure height needed
+    ctx.font = 'italic ' + Math.round(13 * S) + 'px sans-serif';
+    var qWords = shortText.split(' '), qLine = '', qLines = [];
+    for (var i = 0; i < qWords.length; i++) {
+      var t = qLine + qWords[i] + ' ';
+      if (ctx.measureText(t).width > qMaxW && qLine) { qLines.push(qLine.trim()); qLine = qWords[i] + ' '; }
+      else qLine = t;
     }
-    if(line)ctx.fillText(line,pad,yP);yP+=36;
+    if (qLine) qLines.push(qLine.trim());
+    if (qLines.length > 2) { qLines = qLines.slice(0,2); qLines[1] = qLines[1].slice(0,-3) + '...'; }
+
+    var cardH = qLines.length * 24 + qPad * 2 + 8;
+
+    // Glass panel background
+    roundRect(ctx, pad, yStart, innerW, cardH, 12);
+    ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 1; ctx.stroke();
+
+    // Quote mark
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.font = '700 ' + Math.round(28 * S) + 'px serif';
+    ctx.fillText('\u201C', pad + qPad, yStart + qPad + 6);
+
+    // Quote text
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.font = 'italic ' + Math.round(13 * S) + 'px sans-serif';
+    for (var j = 0; j < qLines.length; j++) {
+      ctx.fillText(qLines[j], pad + qPad + 22, yStart + qPad + 10 + j * 24);
+    }
+
+    return yStart + cardH + 8;
   }
-  // Stars
-  ctx.fillStyle='#a09a92'; ctx.font='bold '+Math.round(14*TEXTURE_SCALE)+'px sans-serif';
-  ctx.fillText('RATE', pad, CANVAS_H-70);
-  var starY=CANVAS_H-45, userR=ratings[movie.id]||0;
-  for(var s=0;s<5;s++){
-    ctx.fillStyle=s<userR?'#5a6a7a':'#ccc8c0';
-    ctx.font=Math.round(22*TEXTURE_SCALE)+'px sans-serif';
-    ctx.fillText(s<userR?'\u2605':'\u2606', pad+s*36, starY);
+
+  yP = drawQuoteCard(movie.q1, yP);
+  yP = drawQuoteCard(movie.q5, yP);
+
+  // === 5-STAR RATING ===
+  var starsY = CANVAS_H - 110;
+  var userR = ratings[movie.id] || 0;
+  var starSize = Math.round(22 * S);
+  var starGap = 38;
+  var starsStartX = pad;
+  ctx.font = starSize + 'px sans-serif';
+  for (var s = 0; s < 5; s++) {
+    ctx.fillStyle = s < userR ? '#c0a060' : 'rgba(255,255,255,0.15)';
+    ctx.fillText(s < userR ? '\u2605' : '\u2606', starsStartX + s * starGap, starsY);
   }
-  // Stream
-  ctx.fillStyle='#6b665e'; ctx.font=Math.round(16*TEXTURE_SCALE)+'px sans-serif';
-  ctx.fillText((movie.streaming||[]).join(' | '), pad+200, CANVAS_H-45);
-  ctx.strokeStyle='rgba(0,0,0,0.04)'; ctx.lineWidth=2;
-  roundRect(ctx,2,2,CANVAS_W-4,CANVAS_H-4,cr-1); ctx.stroke();
+
+  // === ACTION BUTTONS — 3 frosted glass circles ===
+  var btnY = starsY - 6;
+  var btnR = 18;
+  var btnStartX = CANVAS_W - pad - btnR * 2 * 3 - 12 * 2;
+  var btns = [
+    { icon: '\u2665', color: 'rgba(220,80,80,0.7)' },  // heart
+    { icon: '\u2606', color: 'rgba(200,180,100,0.7)' }, // bookmark/save
+    { icon: '\u2715', color: 'rgba(255,255,255,0.4)' }  // DNF
+  ];
+  btns.forEach(function(b, i) {
+    var cx = btnStartX + i * (btnR * 2 + 12) + btnR;
+    // Glass circle
+    ctx.beginPath(); ctx.arc(cx, btnY, btnR, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1; ctx.stroke();
+    // Icon
+    ctx.fillStyle = b.color;
+    ctx.font = Math.round(18 * S) + 'px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(b.icon, cx, btnY);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  });
+
+  // === STREAMING LOGOS — bottom row ===
+  var streamY = CANVAS_H - 40;
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.font = '600 ' + Math.round(11 * S) + 'px sans-serif';
+  ctx.fillText('STREAM', pad, streamY);
+  var sX = pad + 80;
+  (movie.streaming || []).forEach(function(name) {
+    // Dot + name
+    ctx.beginPath(); ctx.arc(sX, streamY + 5, 5, 0, Math.PI * 2);
+    ctx.fillStyle = streamColors[name] || '#555'; ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = Math.round(12 * S) + 'px sans-serif';
+    ctx.fillText(name, sX + 10, streamY - 2);
+    sX += ctx.measureText(name).width + 28;
+  });
+
+  // === OUTER BORDER ===
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth = 2;
+  roundRect(ctx, 2, 2, CANVAS_W - 4, CANVAS_H - 4, cr - 1); ctx.stroke();
+
+  // Inner top highlight
+  ctx.strokeStyle = 'rgba(255,255,255,0.03)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(cr + 2, 3); ctx.lineTo(CANVAS_W - cr - 2, 3); ctx.stroke();
+
   ctx.restore();
   return new THREE.CanvasTexture(canvas);
 }
@@ -428,7 +546,7 @@ function rebuildWheel() {
   var gapRad = ARC_GAP_DEG * Math.PI / 180;
   RADIUS = Math.round((PLANE_H / 2) / Math.sin((ANGLE_STEP - gapRad) / 2));
   var frontAngularH = 2 * Math.atan((PLANE_H / 2) / RADIUS) * (180 / Math.PI);
-  FOV = Math.round(frontAngularH / COVERAGE);
+  FOV = Math.round(frontAngularH / COVERAGE * 1.15); // 15% wider to show more curvature
 
   camera = new THREE.PerspectiveCamera(FOV, window.innerWidth / window.innerHeight, 1, 5000);
   camera.position.set(0, 0, 0);
