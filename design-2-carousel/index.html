@@ -234,6 +234,8 @@ var movies = [
 var tiers = [{"key":"all","label":"All"},{"key":"deep-cuts","label":"Deep Cuts"},{"key":"hunt-and-survival","label":"Hunt & Survival"},{"key":"trapped","label":"Trapped"},{"key":"body-horror","label":"Body Horror"},{"key":"revenge","label":"Revenge"},{"key":"supernatural","label":"Supernatural"},{"key":"killers","label":"Killers"}];
 
 var streamColors = {Netflix:"#e50914",Shudder:"#a259ff",Tubi:"#fa382f",Hulu:"#1ce783",Max:"#002be7"};
+var streamLogos = {Netflix:"/t2yyOv40HZeVlLjYsCsPHnWLk4W.jpg",Hulu:"/giwM8XX4V2AQb9vsoN7yti82tKK.jpg",Max:"/6uhKBfmtzFqOcLousHwZuzcrScK.jpg",Shudder:"/5P99DkK1jVs95KcE8bYG9MBtGQ.jpg"};
+var streamLogoCache = {};
 var curTier = 'all';
 var filtered = movies.slice();
 var idx = 0;
@@ -357,23 +359,33 @@ function createPosterTexture(movie, callback) {
     ctx.font = '500 '+Math.round(13*TEXTURE_SCALE)+'px sans-serif';
     ctx.textBaseline = 'bottom';
     ctx.fillText(String(movie.year), 20, CANVAS_H-14);
-    // Streaming service badges — branded circles with initials
-    var badgeR = 10;
-    var badgeGap = 4;
+    // Streaming service logos — circular TMDB logo images, all providers
+    var badgeR = 12;
+    var badgeGap = 5;
     var services = (movie.streaming||[]).slice();
     var totalBadgeW = services.length * badgeR * 2 + (services.length - 1) * badgeGap;
     var badgeX = CANVAS_W - 18 - totalBadgeW + badgeR;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     services.forEach(function(s) {
-      // Branded circle
-      ctx.beginPath(); ctx.arc(badgeX, CANVAS_H - 22, badgeR, 0, Math.PI * 2);
-      ctx.fillStyle = streamColors[s] || '#666'; ctx.fill();
-      // White border
-      ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1; ctx.stroke();
-      // Service initial
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold ' + Math.round(11 * TEXTURE_SCALE / 1.68) + 'px sans-serif';
-      ctx.fillText(s.charAt(0), badgeX, CANVAS_H - 22);
+      var logoImg = streamLogoCache[s];
+      if (logoImg && logoImg.complete && logoImg.naturalWidth > 0) {
+        // Draw circular clipped TMDB logo
+        ctx.save();
+        ctx.beginPath(); ctx.arc(badgeX, CANVAS_H - 22, badgeR, 0, Math.PI * 2); ctx.clip();
+        ctx.drawImage(logoImg, badgeX - badgeR, CANVAS_H - 22 - badgeR, badgeR * 2, badgeR * 2);
+        ctx.restore();
+        // White border
+        ctx.beginPath(); ctx.arc(badgeX, CANVAS_H - 22, badgeR, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 1.5; ctx.stroke();
+      } else {
+        // Fallback: branded circle with initial
+        ctx.beginPath(); ctx.arc(badgeX, CANVAS_H - 22, badgeR, 0, Math.PI * 2);
+        ctx.fillStyle = streamColors[s] || '#666'; ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold ' + Math.round(11 * TEXTURE_SCALE / 1.68) + 'px sans-serif';
+        ctx.fillText(s.charAt(0), badgeX, CANVAS_H - 22);
+      }
       badgeX += badgeR * 2 + badgeGap;
     });
     ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; // Reset alignment
@@ -409,44 +421,81 @@ function createPosterTexture(movie, callback) {
 // 8px grid system, Light frosted glass — Apple Invites / tasteskill.dev aesthetic
 function wrapText(ctx, text, maxW, maxLines) {
   var words = (text||'').split(' '), line='', lines=[];
-  for (var i=0; i<words.length && lines.length<maxLines; i++) {
+  for (var i=0; i<words.length; i++) {
     var test = line + words[i] + ' ';
     if (ctx.measureText(test).width > maxW && line) {
       lines.push(line.trim()); line = words[i] + ' ';
+      if (maxLines && lines.length >= maxLines) break;
     } else line = test;
   }
-  if (line && lines.length < maxLines) {
-    if (i < words.length) line = line.trim().replace(/...$/, '') + '\u2026';
-    lines.push(line.trim());
-  } else if (lines.length === maxLines && i < words.length) {
-    lines[maxLines-1] = lines[maxLines-1].replace(/...$/, '') + '\u2026';
-  }
+  if (line && (!maxLines || lines.length < maxLines)) lines.push(line.trim());
   return lines;
 }
 
-function capQuote(text, cap) {
-  cap = cap || 120;
-  if (!text || text.length <= cap) return text;
-  var sentenceEnd = -1;
-  var markers = ['."', '!"', '?"', '. '];
-  for (var p = 0; p < markers.length; p++) {
-    var idx = text.lastIndexOf(markers[p], cap);
-    if (idx > cap * 0.55 && idx + markers[p].length > sentenceEnd) {
-      sentenceEnd = idx + markers[p].length;
-    }
+// Pick the shortest punchy sentence under charLimit from a review quote
+function pickPunchyQuote(text, charLimit) {
+  if (!text) return '';
+  // Strip HTML tags
+  var clean = text.replace(/<[^>]+>/g, '');
+  // Split into sentences
+  var sentences = clean.match(/[^.!?]+[.!?]+/g);
+  if (!sentences || !sentences.length) return clean.length <= charLimit ? clean : '';
+  // Filter to sentences under charLimit, pick shortest
+  var candidates = [];
+  for (var i = 0; i < sentences.length; i++) {
+    var s = sentences[i].trim();
+    if (s.length > 0 && s.length <= charLimit) candidates.push(s);
   }
-  if (sentenceEnd > 0) return text.slice(0, sentenceEnd);
-  var wordCut = text.slice(0, cap).replace(/\s+\S*$/, '');
-  wordCut += '\u2026';
-  return wordCut;
+  if (!candidates.length) {
+    // No sentence fits under limit — try splitting longest at commas
+    var longest = sentences[0].trim();
+    var clauses = longest.split(/,\s*/);
+    for (var c = 0; c < clauses.length; c++) {
+      if (clauses[c].length > 0 && clauses[c].length <= charLimit) return clauses[c].trim();
+    }
+    return '';
+  }
+  // Among candidates, prefer shorter ones (punchier)
+  candidates.sort(function(a, b) { return a.length - b.length; });
+  return candidates[0];
 }
+
+// Condense synopsis to 2-3 short sentences
+function condenseSynopsis(text) {
+  if (!text) return '';
+  var clean = text.replace(/<[^>]+>/g, '');
+  var sentences = clean.match(/[^.!?]+[.!?]+/g);
+  if (!sentences || sentences.length <= 3) return clean;
+  // Take first 2-3 sentences that fit reasonably
+  var result = '';
+  for (var i = 0; i < Math.min(3, sentences.length); i++) {
+    result += sentences[i].trim() + ' ';
+  }
+  return result.trim();
+}
+
+// Auto-size font: shrink until text fits in maxW, min fontSize
+function autoSizeFont(ctx, text, maxW, startSize, minSize, weight, fontFamily) {
+  var fs = startSize;
+  ctx.font = weight + ' ' + fs + 'px ' + fontFamily;
+  while (ctx.measureText(text).width > maxW && fs > minSize) {
+    fs -= 0.5;
+    ctx.font = weight + ' ' + fs + 'px ' + fontFamily;
+  }
+  return fs;
+}
+
 
 function drawFrostedQuoteCard(ctx, quote, x, y, w, G, maxY, starCount, starColor) {
   if (!quote) return y;
-  var fontSize = G * 0.88; // ~11px — compact
-  var lineH = G * 1.4;
-  ctx.font = 'italic ' + fontSize + 'px -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif';
-  var lines = wrapText(ctx, quote, w - G*3.5, 3);
+  var QFONT = '-apple-system, "SF Pro Display", "Helvetica Neue", sans-serif';
+  var textW = w - G * 3.5;
+  // Auto-size: start at G*0.88, shrink to fit, min 11px scaled
+  var minFS = Math.round(11 * TEXTURE_SCALE / 1.68);
+  var fontSize = autoSizeFont(ctx, quote, textW * 3, G * 0.88, minFS, 'italic', QFONT);
+  var lineH = fontSize * 1.55;
+  ctx.font = 'italic ' + fontSize + 'px ' + QFONT;
+  var lines = wrapText(ctx, quote, textW);
   var cardH = lines.length * lineH + G * 2 + (starCount ? G * 1.2 : 0);
   // Hard ceiling — never draw past maxY
   if (maxY && y + cardH > maxY) return y;
@@ -462,20 +511,20 @@ function drawFrostedQuoteCard(ctx, quote, x, y, w, G, maxY, starCount, starColor
   ctx.fillText('\u201C', x + G * 0.5, y + G * 0.2);
   // Quote text
   ctx.fillStyle = 'rgba(30,30,50,0.55)';
-  ctx.font = 'italic ' + fontSize + 'px -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif';
-  for (var k=0; k<lines.length; k++) {
+  ctx.font = 'italic ' + fontSize + 'px ' + QFONT;
+  for (var k = 0; k < lines.length; k++) {
     ctx.fillText(lines[k], x + G * 2.2, y + G * 1.4 + k * lineH);
   }
-  // Star rating for this review
+  // Star rating
   if (starCount) {
     var ratingY = y + G * 1.4 + lines.length * lineH + G * 0.3;
     ctx.fillStyle = starColor || 'rgba(30,30,50,0.3)';
-    ctx.font = (G * 0.7) + 'px ' + '-apple-system, "SF Pro Display", "Helvetica Neue", sans-serif';
+    ctx.font = (G * 0.7) + 'px ' + QFONT;
     ctx.textAlign = 'left';
     var starStr = '';
     for (var si = 0; si < starCount; si++) starStr += '\u2605';
     ctx.fillText(starStr, x + G * 2.2, ratingY);
-    ctx.textAlign = 'left'; // reset
+    ctx.textAlign = 'left';
   }
   ctx.restore();
   return y + cardH + G * 0.6;
@@ -522,26 +571,21 @@ function createBackTexture(movie) {
 
   var y = P;
 
-  // === TITLE — auto-shrink + 2-line wrap (visual hierarchy level 1) ===
+  // === TITLE — auto-shrink, no truncation (visual hierarchy level 1) ===
   ctx.fillStyle = '#1a1a2e';
   ctx.textBaseline = 'top';
-  var titleFont = G * 2.5;
-  var titleMinFont = Math.round(G * 1.85);
-  ctx.font = '700 ' + titleFont + 'px ' + FONT;
-  while (ctx.measureText(movie.title).width > W && titleFont > titleMinFont) {
-    titleFont -= 1;
-    ctx.font = '700 ' + titleFont + 'px ' + FONT;
-  }
+  var titleMinFS = Math.round(11 * TEXTURE_SCALE / 1.68);
+  var titleFS = autoSizeFont(ctx, movie.title, W, G * 2.5, titleMinFS, '700', FONT);
   if (ctx.measureText(movie.title).width <= W) {
     ctx.fillText(movie.title, P, y);
-    y += G * 3.5;
+    y += titleFS * 1.6;
   } else {
-    var titleLines = wrapText(ctx, movie.title, W, 2);
-    var titleLH = G * 3;
+    var titleLines = wrapText(ctx, movie.title, W);
+    var titleLH = titleFS * 1.4;
     for (var ti = 0; ti < titleLines.length; ti++) {
       ctx.fillText(titleLines[ti], P, y + ti * titleLH);
     }
-    y += titleLines.length * titleLH + G * 1;
+    y += titleLines.length * titleLH + G * 0.5;
   }
 
   // === SUBGENRE PILL ===
@@ -560,21 +604,21 @@ function createBackTexture(movie) {
     y += gh + G * 1.5;
   }
 
-  // === SYNOPSIS — level 3 hierarchy, 5 lines max ===
+  // === SYNOPSIS — condensed to 2-3 sentences, auto-sized ===
   ctx.fillStyle = 'rgba(30,30,50,0.55)';
-  ctx.font = '400 ' + (G * 1.4) + 'px ' + FONT;
-  var synText = movie.synopsis || '';
-  if (synText.length > 150) {
-    var synCut = synText.lastIndexOf('. ', 150);
-    if (synCut > 90) {
-      synText = synText.slice(0, synCut + 1);
-    } else {
-      synText = synText.slice(0, 150).replace(/\s+\S*$/, '') + '\u2026';
-    }
+  var synText = condenseSynopsis(movie.synopsis);
+  var synMinFS = Math.round(11 * TEXTURE_SCALE / 1.68);
+  var synFS = G * 1.4;
+  ctx.font = '400 ' + synFS + 'px ' + FONT;
+  var synLines = wrapText(ctx, synText, W);
+  // Auto-shrink if too many lines
+  while (synLines.length > 5 && synFS > synMinFS) {
+    synFS -= 0.5;
+    ctx.font = '400 ' + synFS + 'px ' + FONT;
+    synLines = wrapText(ctx, synText, W);
   }
-  var synLines = wrapText(ctx, synText, W, 4);
-  var synLH = G * 2.3;
-  for (var si=0; si<synLines.length; si++) {
+  var synLH = synFS * 1.65;
+  for (var si = 0; si < synLines.length; si++) {
     ctx.fillText(synLines[si], P, y); y += synLH;
   }
   y += G * 1.5;
@@ -584,23 +628,16 @@ function createBackTexture(movie) {
   ctx.beginPath(); ctx.moveTo(P, y); ctx.lineTo(P+W, y); ctx.stroke();
   y += G * 1.5;
 
-  // === TWO FROSTED GLASS QUOTE CARDS ===
-  var q1Text = capQuote(movie.q1 || '');
-  var q5Text = capQuote(movie.q5 || '');
+  // === TWO FROSTED GLASS QUOTE CARDS — pick punchiest short quote ===
+  var q1Text = pickPunchyQuote(movie.q1, 100);
+  var q5Text = pickPunchyQuote(movie.q5, 100);
   if (q5Text === q1Text) q5Text = '';
-  var bottomPinY = CANVAS_H - G * 13; // hard ceiling — nothing above this bleeds into stars
-  var quoteAvailable = bottomPinY - y;
-  if (quoteAvailable < G * 10.4) {
-    if (quoteAvailable >= G * 5.2 && q1Text) {
-      y = drawFrostedQuoteCard(ctx, q1Text, P, y, W, G, bottomPinY, 1, '#ef4444');
-    }
-  } else {
-    if (q1Text) {
-      y = drawFrostedQuoteCard(ctx, q1Text, P, y, W, G, bottomPinY, 1, '#ef4444');
-    }
-    if (q5Text) {
-      y = drawFrostedQuoteCard(ctx, q5Text, P, y, W, G, bottomPinY, 5, '#22c55e');
-    }
+  var bottomPinY = CANVAS_H - G * 13;
+  if (q1Text) {
+    y = drawFrostedQuoteCard(ctx, q1Text, P, y, W, G, bottomPinY, 1, '#ef4444');
+  }
+  if (q5Text) {
+    y = drawFrostedQuoteCard(ctx, q5Text, P, y, W, G, bottomPinY, 5, '#22c55e');
   }
 
   // === BOTTOM SECTION — pinned, 8px grid aligned ===
@@ -1127,10 +1164,15 @@ document.getElementById('shuffleBtn').addEventListener('click', function() {
     ease: 'expo.out',
     overwrite: 'all',
     onComplete: function() {
-      // Snap: reset to clean position, reload textures for target movie
-      listIdx = target;
-      group.rotation.x = 0;
-      loadWindowTextures();
+      // DO NOT reload textures — keep whatever tile landed in center
+      // Normalize rotation to avoid floating point drift
+      var TWO_PI = Math.PI * 2;
+      group.rotation.x = ((group.rotation.x % TWO_PI) + TWO_PI) % TWO_PI;
+      // Find which movie is in the center slot after spin
+      var centerSlot = getCenterSlot();
+      var centerMovieIdx = meshes[centerSlot].userData.movieIdx;
+      listIdx = centerMovieIdx;
+      shuffleLock = true;
       updateCounter();
       setTimeout(function() { isAnimating = false; isShuffling = false; }, 400);
     }
@@ -1157,6 +1199,14 @@ document.getElementById('shuffleBtn').addEventListener('click', function() {
     setTimeout(function() { intro.remove(); }, 800);
   }, 3200);
 })();
+
+// === PRELOAD STREAMING LOGOS ===
+Object.keys(streamLogos).forEach(function(name) {
+  var img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.src = 'https://media.themoviedb.org/t/p/w92' + streamLogos[name];
+  streamLogoCache[name] = img;
+});
 
 // === INIT ===
 filterAndRebuild();
