@@ -95,6 +95,24 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #07060b;
 .gesture-toast.hide { opacity:0; transform: translate(-50%,-50%) scale(0.9); transition: all 0.3s ease; }
 .toast-icon { font-size: 22px; display: block; margin-bottom: 4px; }
 
+/* Splash — tap to enter */
+.splash-screen {
+  position: fixed; inset: 0; z-index: 10000; background: #07060b;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  cursor: pointer; gap: 24px;
+}
+.splash-logo {
+  font-size: 28px; font-weight: 800; letter-spacing: 6px; text-transform: uppercase;
+  background: linear-gradient(180deg, #c0c8d0 0%, #8a9aaa 40%, #6a7a8a 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+.splash-hint {
+  font-size: 12px; font-weight: 400; color: rgba(255,255,255,0.3);
+  letter-spacing: 2px; text-transform: uppercase;
+  animation: splashPulse 2s ease-in-out infinite;
+}
+@keyframes splashPulse { 0%,100%{opacity:0.3} 50%{opacity:0.7} }
+
 /* Intro */
 .intro-screen {
   position: fixed; inset: 0; z-index: 9999; background: #0a0a0a;
@@ -139,8 +157,14 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #07060b;
 </head>
 <body>
 
+<!-- Splash — tap to enter (required for mobile audio) -->
+<div class="splash-screen" id="splashScreen">
+  <div class="splash-logo">UNCUT</div>
+  <div class="splash-hint">tap to enter</div>
+</div>
+
 <!-- Intro -->
-<div class="intro-screen" id="introScreen">
+<div class="intro-screen" id="introScreen" style="display:none;">
   <div style="text-align:center;max-width:320px;padding:0 24px;">
     <div class="intro-text">The Terror Must Be<br>In English</div>
     <div class="waveform" id="waveform"></div>
@@ -632,10 +656,25 @@ function createBackTexture(movie) {
   ctx.beginPath(); ctx.moveTo(P, y); ctx.lineTo(P+W, y); ctx.stroke();
   y += G * 1.5;
 
-  // === TWO FROSTED GLASS QUOTE CARDS — pick punchiest short quote ===
-  var q1Text = pickPunchyQuote(movie.q1, 100);
-  var q5Text = pickPunchyQuote(movie.q5, 100);
-  // Always show both quotes even if identical — different star ratings distinguish them
+  // === TWO FROSTED GLASS QUOTE CARDS — validated, no duplicates ===
+  var synText50 = (movie.synopsis || '').slice(0, 50);
+  function isQuoteBad(q) {
+    if (!q) return true;
+    var raw = q.replace(/<[^>]+>/g, '');
+    if (!raw || raw.length < 5) return true;
+    if (raw.indexOf('breakdown') >= 0 || raw.indexOf('collection') >= 0) return true;
+    if (synText50 && raw.slice(0, 50) === synText50) return true;
+    return false;
+  }
+  var q1Raw = movie.q1 || '', q5Raw = movie.q5 || '';
+  var q1Bad = isQuoteBad(q1Raw);
+  var q5Bad = isQuoteBad(q5Raw);
+  // If both are identical, only show q1
+  if (!q1Bad && !q5Bad && q1Raw === q5Raw) q5Bad = true;
+  var q1Text = q1Bad ? '' : pickPunchyQuote(q1Raw, 100);
+  var q5Text = q5Bad ? '' : pickPunchyQuote(q5Raw, 100);
+  // Final dedup on picked text
+  if (q1Text && q5Text && q1Text === q5Text) q5Text = '';
   var bottomPinY = CANVAS_H - G * 13;
   if (q1Text) {
     y = drawFrostedQuoteCard(ctx, q1Text, P, y, W, G, bottomPinY, 1, '#ef4444');
@@ -1188,8 +1227,12 @@ document.getElementById('shuffleBtn').addEventListener('click', function() {
   });
 });
 
-// === INTRO ===
+// === SPLASH + INTRO ===
 (function() {
+  var splash = document.getElementById('splashScreen');
+  var introScreen = document.getElementById('introScreen');
+
+  // Build waveform bars
   var wf = document.getElementById('waveform');
   for (var i=0; i<28; i++) {
     var bar = document.createElement('div'); bar.className='waveform-bar';
@@ -1199,25 +1242,31 @@ document.getElementById('shuffleBtn').addEventListener('click', function() {
     bar.style.animationDuration = (0.5+Math.random()*0.5)+'s';
     wf.appendChild(bar);
   }
-  var audio = new Audio('terror-english.m4a');
-  audio.volume = 0.8;
-  var p = audio.play(); if (p) p.catch(function(){});
-  // Wait for audio to finish (min 3s), then transition
-  var minTime = 3000;
-  var startMs = Date.now();
-  audio.addEventListener('ended', dismiss);
-  setTimeout(dismiss, 5000); // safety fallback
-  var dismissed = false;
-  function dismiss() {
-    if (dismissed) return;
-    var elapsed = Date.now() - startMs;
-    var remaining = Math.max(0, minTime - elapsed);
-    setTimeout(function() {
-      dismissed = true;
-      var intro = document.getElementById('introScreen');
-      if (intro) { intro.classList.add('fade-out'); setTimeout(function() { intro.remove(); }, 800); }
-    }, remaining);
-  }
+
+  // On splash tap: play audio (user gesture context), show intro, dismiss after audio
+  splash.addEventListener('click', function() {
+    splash.remove();
+    introScreen.style.display = '';
+
+    var audio = new Audio('terror-english.m4a');
+    audio.volume = 0.8;
+    var p = audio.play(); if (p) p.catch(function(){});
+
+    var minTime = 3000;
+    var startMs = Date.now();
+    audio.addEventListener('ended', dismiss);
+    setTimeout(dismiss, 5000);
+    var dismissed = false;
+    function dismiss() {
+      if (dismissed) return;
+      var elapsed = Date.now() - startMs;
+      var remaining = Math.max(0, minTime - elapsed);
+      setTimeout(function() {
+        dismissed = true;
+        if (introScreen) { introScreen.classList.add('fade-out'); setTimeout(function() { introScreen.remove(); }, 800); }
+      }, remaining);
+    }
+  });
 })();
 
 // === PRELOAD STREAMING LOGOS ===
