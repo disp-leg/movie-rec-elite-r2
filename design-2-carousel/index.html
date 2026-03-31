@@ -123,7 +123,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #07060b;
   display: flex; flex-direction: column; justify-content: flex-end;
   padding: 0 16px 10px; gap: 4px; opacity: 0;
 }
-#backOverlay.active { pointer-events: auto; opacity: 1; }
+#backOverlay.active { pointer-events: auto; opacity: 1; cursor: pointer; }
 .overlay-stars { display: flex; justify-content: center; gap: 4px; margin-bottom: 2px; }
 .overlay-star { font-size: 22px; cursor: pointer; color: transparent; background: none; border: none; padding: 4px; }
 .overlay-btns { display: flex; justify-content: center; gap: 10px; }
@@ -245,10 +245,11 @@ var genreScrollMemory = {};
 var prevTier = null;
 
 // ============================================
-// GENRE TABS
+// GENRE TABS — Watchlist first, then All, then genres
 // ============================================
 var catNav = document.getElementById('catNav');
-tiers.forEach(function(t) {
+var allTabs = [{key:'watchlist',label:'Watchlist'}].concat(tiers);
+allTabs.forEach(function(t) {
   var b = document.createElement('button');
   b.className = 'cat-pill' + (t.key === 'all' ? ' active' : '');
   b.textContent = t.label;
@@ -265,7 +266,13 @@ function filterAndRebuild() {
   // Save current scroll position
   if (prevTier && group) genreScrollMemory[prevTier] = listIdx;
   prevTier = curTier;
-  filtered = curTier === 'all' ? movies.slice() : movies.filter(function(m) { return m.tier === curTier; });
+  if (curTier === 'all') {
+    filtered = movies.slice();
+  } else if (curTier === 'watchlist') {
+    filtered = watchlistArr.slice();
+  } else {
+    filtered = movies.filter(function(m) { return m.tier === curTier; });
+  }
   rebuildWheel();
 }
 
@@ -1015,6 +1022,11 @@ function updateOverlayStars() {
   });
 }
 
+// Tap dead space on back overlay = flip back to front
+backOverlay.addEventListener('click', function(e) {
+  if (e.target === backOverlay) flipCenterTile();
+});
+
 function showBackOverlay() {
   updateOverlayStars();
   backOverlay.classList.add('active');
@@ -1187,14 +1199,25 @@ document.getElementById('shuffleBtn').addEventListener('click', function() {
     bar.style.animationDuration = (0.5+Math.random()*0.5)+'s';
     wf.appendChild(bar);
   }
-  var audio = document.getElementById('introAudio');
-  audio.src = 'intro.mp3'; audio.volume = 0.8;
+  var audio = new Audio('terror-english.m4a');
+  audio.volume = 0.8;
   var p = audio.play(); if (p) p.catch(function(){});
-  setTimeout(function() {
-    var intro = document.getElementById('introScreen');
-    intro.classList.add('fade-out');
-    setTimeout(function() { intro.remove(); }, 800);
-  }, 3200);
+  // Wait for audio to finish (min 3s), then transition
+  var minTime = 3000;
+  var startMs = Date.now();
+  audio.addEventListener('ended', dismiss);
+  setTimeout(dismiss, 5000); // safety fallback
+  var dismissed = false;
+  function dismiss() {
+    if (dismissed) return;
+    var elapsed = Date.now() - startMs;
+    var remaining = Math.max(0, minTime - elapsed);
+    setTimeout(function() {
+      dismissed = true;
+      var intro = document.getElementById('introScreen');
+      if (intro) { intro.classList.add('fade-out'); setTimeout(function() { intro.remove(); }, 800); }
+    }, remaining);
+  }
 })();
 
 // === PRELOAD STREAMING LOGOS ===
