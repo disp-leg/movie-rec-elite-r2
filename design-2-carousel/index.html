@@ -425,7 +425,7 @@ function wrapText(ctx, text, maxW, maxLines) {
 }
 
 function capQuote(text, cap) {
-  cap = cap || 145;
+  cap = cap || 120;
   if (!text || text.length <= cap) return text;
   var sentenceEnd = -1;
   var markers = ['."', '!"', '?"', '. '];
@@ -564,15 +564,15 @@ function createBackTexture(movie) {
   ctx.fillStyle = 'rgba(30,30,50,0.55)';
   ctx.font = '400 ' + (G * 1.4) + 'px ' + FONT;
   var synText = movie.synopsis || '';
-  if (synText.length > 280) {
-    var synCut = synText.lastIndexOf('. ', 280);
-    if (synCut > 168) {
+  if (synText.length > 150) {
+    var synCut = synText.lastIndexOf('. ', 150);
+    if (synCut > 90) {
       synText = synText.slice(0, synCut + 1);
     } else {
-      synText = synText.slice(0, 280).replace(/\s+\S*$/, '') + '\u2026';
+      synText = synText.slice(0, 150).replace(/\s+\S*$/, '') + '\u2026';
     }
   }
-  var synLines = wrapText(ctx, synText, W, 5);
+  var synLines = wrapText(ctx, synText, W, 4);
   var synLH = G * 2.3;
   for (var si=0; si<synLines.length; si++) {
     ctx.fillText(synLines[si], P, y); y += synLH;
