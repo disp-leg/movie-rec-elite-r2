@@ -7,7 +7,7 @@
 <title>UNCUT</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { width: 100%; height: 100%; overflow: hidden; background: #07060b;
@@ -95,16 +95,30 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #07060b;
 .gesture-toast.hide { opacity:0; transform: translate(-50%,-50%) scale(0.9); transition: all 0.3s ease; }
 .toast-icon { font-size: 22px; display: block; margin-bottom: 4px; }
 
-/* Splash — tap to enter */
+/* Splash — glitch logo + tap to enter */
 .splash-screen {
-  position: fixed; inset: 0; z-index: 10000; background: #07060b;
+  position: fixed; inset: 0; z-index: 10000; background: #000;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  cursor: pointer; gap: 24px;
+  cursor: pointer; gap: 28px; transition: opacity 0.8s ease;
 }
-.splash-logo {
-  font-size: 28px; font-weight: 800; letter-spacing: 6px; text-transform: uppercase;
-  background: linear-gradient(180deg, #c0c8d0 0%, #8a9aaa 40%, #6a7a8a 100%);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+.splash-screen.fade-out { opacity: 0; pointer-events: none; }
+.splash-container { position: relative; }
+.splash-main {
+  font-family: 'Bebas Neue', 'Plus Jakarta Sans', sans-serif;
+  font-size: 80px; color: #CC2936; letter-spacing: 20px;
+  text-transform: uppercase; user-select: none; position: relative;
+}
+.splash-glitch {
+  position: absolute; top: 0; left: 0;
+  font-family: 'Bebas Neue', 'Plus Jakarta Sans', sans-serif;
+  font-size: 80px; letter-spacing: 20px; text-transform: uppercase;
+  user-select: none; pointer-events: none; opacity: 0;
+}
+.splash-glitch-r { color: #ff0040; }
+.splash-glitch-b { color: #660015; }
+.splash-flash {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: #CC2936; opacity: 0; pointer-events: none; z-index: 10001;
 }
 .splash-hint {
   font-size: 12px; font-weight: 400; color: rgba(255,255,255,0.3);
@@ -112,29 +126,6 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #07060b;
   animation: splashPulse 2s ease-in-out infinite;
 }
 @keyframes splashPulse { 0%,100%{opacity:0.3} 50%{opacity:0.7} }
-
-/* Intro */
-.intro-screen {
-  position: fixed; inset: 0; z-index: 9999; background: #0a0a0a;
-  display: flex; align-items: center; justify-content: center;
-  transition: opacity 0.8s ease;
-}
-.intro-screen.fade-out { opacity: 0; pointer-events: none; }
-.intro-text {
-  font-size: 22px; font-weight: 700; color: #e8e6e2; letter-spacing: -0.5px;
-  line-height: 1.35; text-align: center; opacity: 0; transform: translateY(12px);
-  animation: introIn 0.6s ease forwards 0.3s;
-}
-@keyframes introIn { to { opacity:1; transform:translateY(0); } }
-.waveform {
-  display: flex; align-items: center; justify-content: center; gap: 3px;
-  height: 36px; margin-top: 24px; opacity: 0; animation: introIn 0.4s ease forwards 0.7s;
-}
-.waveform-bar {
-  width: 3px; border-radius: 2px; background: #e8e6e2; opacity: 0.5;
-  animation: wfPulse 0.8s ease-in-out infinite alternate;
-}
-@keyframes wfPulse { 0%{height:4px;opacity:0.25} 100%{height:var(--bar-h,24px);opacity:0.7} }
 #backOverlay {
   position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
   width: 310px; height: 440px; z-index: 25; pointer-events: none;
@@ -157,20 +148,16 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #07060b;
 </head>
 <body>
 
-<!-- Splash — tap to enter (required for mobile audio) -->
+<!-- Splash — glitch logo, tap to enter -->
 <div class="splash-screen" id="splashScreen">
-  <div class="splash-logo">UNCUT</div>
-  <div class="splash-hint">tap to enter</div>
-</div>
-
-<!-- Intro -->
-<div class="intro-screen" id="introScreen" style="display:none;">
-  <div style="text-align:center;max-width:320px;padding:0 24px;">
-    <div class="intro-text">The Terror Must Be<br>In English</div>
-    <div class="waveform" id="waveform"></div>
+  <div class="splash-container">
+    <div class="splash-main" id="splashMain">CUT</div>
+    <div class="splash-glitch splash-glitch-r" id="splashGR">CUT</div>
+    <div class="splash-glitch splash-glitch-b" id="splashGB">CUT</div>
   </div>
-  <audio id="introAudio" preload="auto"></audio>
+  <div class="splash-hint" id="splashHint">tap to enter</div>
 </div>
+<div class="splash-flash" id="splashFlash"></div>
 
 <!-- Toast -->
 <div class="gesture-toast" id="gestureToast"></div>
@@ -1241,45 +1228,61 @@ document.getElementById('shuffleBtn').addEventListener('click', function() {
   });
 });
 
-// === SPLASH + INTRO ===
+// === SPLASH — Glitch logo animation ===
 (function() {
   var splash = document.getElementById('splashScreen');
-  var introScreen = document.getElementById('introScreen');
+  var mainText = document.getElementById('splashMain');
+  var glitchR = document.getElementById('splashGR');
+  var glitchB = document.getElementById('splashGB');
+  var flash = document.getElementById('splashFlash');
+  var hint = document.getElementById('splashHint');
 
-  // Build waveform bars
-  var wf = document.getElementById('waveform');
-  for (var i=0; i<28; i++) {
-    var bar = document.createElement('div'); bar.className='waveform-bar';
-    var center = Math.abs(i-14)/14;
-    bar.style.setProperty('--bar-h', Math.round(8+(1-center)*20+Math.random()*6)+'px');
-    bar.style.animationDelay = (i*0.04+Math.random()*0.15)+'s';
-    bar.style.animationDuration = (0.5+Math.random()*0.5)+'s';
-    wf.appendChild(bar);
-  }
-
-  // On splash tap: play audio (user gesture context), show intro, dismiss after audio
   splash.addEventListener('click', function() {
-    splash.remove();
-    introScreen.style.display = '';
+    // Hide hint immediately
+    hint.style.display = 'none';
+    splash.style.cursor = 'default';
 
+    // Play audio (user gesture context for mobile)
     var audio = new Audio('terror-english.m4a');
     audio.volume = 0.8;
     var p = audio.play(); if (p) p.catch(function(){});
 
-    var minTime = 3000;
-    var startMs = Date.now();
-    audio.addEventListener('ended', dismiss);
-    setTimeout(dismiss, 5000);
-    var dismissed = false;
-    function dismiss() {
-      if (dismissed) return;
-      var elapsed = Date.now() - startMs;
-      var remaining = Math.max(0, minTime - elapsed);
-      setTimeout(function() {
-        dismissed = true;
-        if (introScreen) { introScreen.classList.add('fade-out'); setTimeout(function() { introScreen.remove(); }, 800); }
-      }, remaining);
-    }
+    // Run glitch animation: CUT → flicker → UNCUT in red → breathe 2s → fade out
+    var tl = gsap.timeline();
+
+    // Brief pause
+    tl.to({}, { duration: 0.3 });
+
+    // Glitch flicker
+    tl.to(glitchR, { opacity: 0.8, x: -3, duration: 0.04 });
+    tl.to(glitchB, { opacity: 0.8, x: 3, duration: 0.04 }, '<');
+
+    // Red flash
+    tl.to(flash, { opacity: 0.12, duration: 0.03 });
+    tl.to(flash, { opacity: 0, duration: 0.06 });
+
+    // Swap CUT → UNCUT
+    tl.call(function() {
+      mainText.textContent = 'UNCUT';
+      glitchR.textContent = 'UNCUT';
+      glitchB.textContent = 'UNCUT';
+    });
+
+    // Settle glitch layers
+    tl.to(glitchR, { x: -1, opacity: 0.3, duration: 0.08 });
+    tl.to(glitchB, { x: 1, opacity: 0.3, duration: 0.08 }, '<');
+    tl.to(glitchR, { x: 0, opacity: 0, duration: 0.1 });
+    tl.to(glitchB, { x: 0, opacity: 0, duration: 0.1 }, '<');
+
+    // Breathe pulse for 2 seconds
+    tl.to(mainText, { opacity: 0.85, duration: 0.9, ease: 'sine.inOut', yoyo: true, repeat: 1 });
+
+    // Fade out splash → show carousel
+    tl.call(function() {
+      splash.classList.add('fade-out');
+      flash.style.display = 'none';
+      setTimeout(function() { splash.remove(); flash.remove(); }, 800);
+    });
   });
 })();
 
